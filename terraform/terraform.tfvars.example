@@ -40,3 +40,4 @@ sql_admin_password = "REPLACE-WITH-STRONG-PASSWORD@123"
 
 # Cheapest SQL (Basic tier - 5 DTUs)
 # sql_database_sku         = "Basic"
+github_pat      = "REPLACE-WITH-YOUR-GITHUB-PERSONAL-ACCESS-TOKEN"
