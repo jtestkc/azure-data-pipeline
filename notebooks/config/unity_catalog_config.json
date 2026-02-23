@@ -1,0 +1,69 @@
+{
+  "metastore": {
+    "name": "sales-analytics-metastore",
+    "cloud": "azure",
+    "region": "eastus"
+  },
+  "catalogs": [
+    {
+      "name": "sales_catalog",
+      "description": "Main catalog for sales analytics data",
+      "schemas": [
+        {
+          "name": "bronze",
+          "description": "Raw streaming data from Event Hubs"
+        },
+        {
+          "name": "silver",
+          "description": "Cleaned and deduplicated data"
+        },
+        {
+          "name": "gold",
+          "description": "Aggregated business metrics"
+        },
+        {
+          "name": "enriched",
+          "description": "Enriched with customer dimension data"
+        },
+        {
+          "name": "ml",
+          "description": "ML models and experiments"
+        },
+        {
+          "name": "documents",
+          "description": "RAG document storage"
+        }
+      ]
+    }
+  ],
+  "table_properties": {
+    "bronze_orders": {
+      "description": "Raw order events from Event Hubs",
+      "pipeline_id": "orders-streaming-pipeline"
+    },
+    "silver_orders": {
+      "description": "Cleaned and deduplicated order data"
+    },
+    "gold_daily_revenue": {
+      "description": "Daily revenue by region"
+    },
+    "gold_top_products": {
+      "description": "Top selling products"
+    },
+    "gold_customer_ltv": {
+      "description": "Customer lifetime value"
+    }
+  },
+  "access_control": {
+    "column_masking": {
+      "tables": ["enriched_orders"],
+      "masked_columns": ["customer_id"],
+      "mask_function": "MASK"
+    },
+    "row_level_security": {
+      "tables": ["gold_daily_revenue"],
+      "column": "region",
+      "description": "Users can only see data for their assigned region"
+    }
+  }
+}

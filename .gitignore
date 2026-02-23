@@ -1,0 +1,125 @@
+# =============================================================================
+# .gitignore - SECURITY CRITICAL
+# =============================================================================
+# This file prevents sensitive files from being committed to GitHub.
+# NEVER remove this file or commit secrets!
+
+# -----------------------------------------------------------------------------
+# TERRAFORM - Never commit these files!
+# -----------------------------------------------------------------------------
+
+# Actual Terraform configuration with secrets
+terraform.tfvars
+
+# Terraform state files (contain sensitive data)
+*.tfstate
+*.tfstate.*
+
+# Terraform lock files (can contain provider versions)
+# NOTE: We DO commit .terraform.lock.hcl for reproducibility
+# But NEVER commit the local state backup
+*.backup
+
+# Provider credentials - use environment variables instead!
+# DO NOT create any file with these names:
+# azure_credentials.json
+# service_principal.json
+# *.pem
+# *.key
+
+# -----------------------------------------------------------------------------
+# ENVIRONMENT FILES
+# -----------------------------------------------------------------------------
+
+# Local environment overrides
+.env
+.env.local
+.env.*.local
+
+# Azure-specific (add to GitHub Secrets instead!)
+*.publishsettings
+
+# -----------------------------------------------------------------------------
+# SECRETS & CREDENTIALS
+# -----------------------------------------------------------------------------
+
+# Never commit:
+passwords.txt
+secrets.txt
+credentials.json
+config_secrets.json
+*.secret
+*.key
+*.pfx
+*.p12
+
+# Database connection strings
+connection_strings.txt
+
+# API keys and tokens
+api_keys.txt
+tokens.txt
+
+# -----------------------------------------------------------------------------
+# DATABRICKS LOCAL FILES
+# -----------------------------------------------------------------------------
+
+# Databricks CLI credentials
+~/.databrickscfg
+
+# Cluster logs (may contain sensitive info)
+logs/
+*.log
+
+# -----------------------------------------------------------------------------
+# AZURE SPECIFIC
+# -----------------------------------------------------------------------------
+
+# Azure deployment credentials
+deployment_credentials.json
+
+# Service Principal (use GitHub Secrets!)
+sp_credentials.json
+
+# -----------------------------------------------------------------------------
+# TEMPORARY FILES
+# -----------------------------------------------------------------------------
+
+# OS files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# -----------------------------------------------------------------------------
+# WHAT TO COMMIT (DO NOT DELETE)
+# -----------------------------------------------------------------------------
+
+# Terraform code (NOT variables with secrets!)
+*.tf
+!terraform.tfvars.example
+
+# Provider lock file (OK to commit)
+.terraform.lock.hcl
+
+# Documentation
+README.md
+*.md
+
+# GitHub Actions workflows
+.github/
+
+# Scripts (if they don't contain secrets)
+scripts/

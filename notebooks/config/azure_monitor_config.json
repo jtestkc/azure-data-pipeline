@@ -1,0 +1,70 @@
+{
+  "log_analytics_workspace": {
+    "name": "law-sales-analytics",
+    "sku": "PerGB2018",
+    "retention_days": 30
+  },
+  "databricks_monitoring": {
+    "diagnostic_settings": {
+      "enabled_logs": [
+        "clusters",
+        "jobs",
+        "notebook",
+        "workspace"
+      ],
+      "enabled_metrics": [
+        "AllMetrics"
+      ]
+    }
+  },
+  "alert_rules": [
+    {
+      "name": "HighClusterFailureRate",
+      "description": "Alert when cluster failure rate exceeds 10%",
+      "condition": "cluster_failure_rate > 10",
+      "severity": "critical",
+      "action_group_id": "email-action-group"
+    },
+    {
+      "name": "StreamingJobLag",
+      "description": "Alert when streaming job processing lag exceeds 5 minutes",
+      "condition": "streaming_lag_minutes > 5",
+      "severity": "warning",
+      "action_group_id": "email-action-group"
+    },
+    {
+      "name": "DataQualityAnomaly",
+      "description": "Alert when data quality score drops below 95%",
+      "condition": "dq_score < 95",
+      "severity": "warning",
+      "action_group_id": "slack-action-group"
+    }
+  ],
+  "metrics_to_track": [
+    "cluster_cpu_utilization",
+    "cluster_memory_utilization",
+    "streaming_batch_processing_time",
+    "streaming_input_rows",
+    "streaming_processed_rows",
+    "delta_table_size_gb",
+    "query_execution_time_ms",
+    "mlflow_experiment_accuracy"
+  ],
+  "dashboards": {
+    "streaming_dashboard": {
+      "metrics": [
+        "streaming_input_rows",
+        "streaming_processed_rows",
+        "streaming_batch_processing_time",
+        "streaming_lag_minutes"
+      ]
+    },
+    "performance_dashboard": {
+      "metrics": [
+        "cluster_cpu_utilization",
+        "cluster_memory_utilization",
+        "query_execution_time_ms"
+      ]
+    }
+  }
+}

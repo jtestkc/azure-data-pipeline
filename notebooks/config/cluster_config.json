@@ -1,0 +1,31 @@
+{
+  "cluster": {
+    "spark_version": "14.3-scala12",
+    "node_type_id": "Standard_DS3_v2",
+    "num_workers": 2,
+    "min_workers": 1,
+    "max_workers": 4,
+    "autotermination_minutes": 30,
+    "spark_conf": {
+      "spark.databricks.delta.optimizeWrite.enabled": "true",
+      "spark.databricks.delta.autoCompact.enabled": "true",
+      "spark.databricks.unityCatalog.enabled": "true",
+      "spark.sql.shuffle.partitions": "8",
+      "spark.default.parallelism": "8"
+    },
+    "libraries": [
+      {"pypi": {"package": "azure-eventhub==5.11.4"}},
+      {"pypi": {"package": "faker==22.2.0"}},
+      {"pypi": {"package": "mlflow==2.10.2"}},
+      {"pypi": {"package": "openai==1.12.0"}},
+      {"pypi": {"package": "langchain==0.1.20"}},
+      {"pypi": {"package": "langchain-community==0.0.38"}},
+      {"pypi": {"package": "pymysql==1.1.0"}},
+      {"pypi": {"package": "psycopg2-binary==2.9.9"}}
+    ]
+  },
+  "photons": {
+    "enabled": true,
+    "description": "Photon runtime is enabled by default on DBR 14.0+ Premium tier"
+  }
+}

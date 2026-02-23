@@ -1,0 +1,28 @@
+{
+  "adls_gen2": {
+    "account_name": "{{secrets/kv-secrets/adls-account-name}}",
+    "container_name": "rawdata",
+    "mount_point": "/mnt/datalake",
+    "oauth2_config": {
+      "client_id": "{{secrets/kv-secrets/sp-client-id}}",
+      "client_secret": "{{secrets/kv-secrets/sp-client-secret}}",
+      "tenant_id": "{{secrets/kv-secrets/sp-tenant-id}}"
+    }
+  },
+  "eventhub": {
+    "namespace": "{{secrets/kv-secrets/evh-namespace}}",
+    "eventhub_name": "orders",
+    "connection_string": "{{secrets/kv-secrets/eventhub-connection-string}}",
+    "consumer_group": "$Default"
+  },
+  "azure_sql": {
+    "jdbc_url": "jdbc:sqlserver://{{secrets/kv-secrets/sql-server-name}}.database.windows.net:1433;database=customers;encrypt=true;trustServerCertificate=false",
+    "username": "{{secrets/kv-secrets/sql-username}}",
+    "password": "{{secrets/kv-secrets/sql-password}}",
+    "driver": "com.microsoft.sqlserver.jdbc.SQLServerDriver"
+  },
+  "key_vault": {
+    "name": "{{secrets/kv-secrets/kv-name}}",
+    "secret_scope": "kv-secrets"
+  }
+}

@@ -1,0 +1,136 @@
+{
+  "name": "sales-analytics-pipeline",
+  "description": "Real-time sales analytics pipeline with medallion architecture",
+  "timeout_seconds": 3600,
+  "max_concurrent_runs": 1,
+  "tags": {
+    "owner": "data-engineering-team",
+    "environment": "production",
+    "team": "analytics"
+  },
+  "tasks": [
+    {
+      "task_key": "ingest_bronze",
+      "description": "Ingest streaming data from Event Hubs to Bronze layer",
+      "notebook_task": {
+        "notebook_path": "/Repos/sales-analytics/notebooks/01_ingestion/01_bronze_streaming",
+        "base_parameters": {}
+      },
+      "cluster_key": "shared-cluster",
+      "timeout_seconds": 1800,
+      "retry_on_timeout": true,
+      "max_retries": 3,
+      "min_retry_interval_millis": 60000
+    },
+    {
+      "task_key": "transform_silver",
+      "description": "Clean, deduplicate, and type-cast data in Silver layer",
+      "notebook_task": {
+        "notebook_path": "/Repos/sales-analytics/notebooks/02_silver/02_silver_transformation",
+        "base_parameters": {}
+      },
+      "depends_on": [
+        {"task_key": "ingest_bronze"}
+      ],
+      "cluster_key": "shared-cluster",
+      "timeout_seconds": 900,
+      "retry_on_timeout": true,
+      "max_retries": 2,
+      "min_retry_interval_millis": 30000
+    },
+    {
+      "task_key": "aggregate_gold",
+      "description": "Create business aggregations in Gold layer",
+      "notebook_task": {
+        "notebook_path": "/Repos/sales-analytics/notebooks/03_gold/03_gold_aggregation",
+        "base_parameters": {}
+      },
+      "depends_on": [
+        {"task_key": "transform_silver"}
+      ],
+      "cluster_key": "shared-cluster",
+      "timeout_seconds": 900,
+      "retry_on_timeout": true,
+      "max_retries": 2,
+      "min_retry_interval_millis": 30000
+    },
+    {
+      "task_key": "enrich_customers",
+      "description": "Join with Azure SQL customer dimension",
+      "notebook_task": {
+        "notebook_path": "/Repos/sales-analytics/notebooks/04_enrichment/04_jdbc_enrichment",
+        "base_parameters": {}
+      },
+      "depends_on": [
+        {"task_key": "transform_silver"}
+      ],
+      "cluster_key": "shared-cluster",
+      "timeout_seconds": 600,
+      "retry_on_timeout": true,
+      "max_retries": 2,
+      "min_retry_interval_millis": 30000
+    },
+    {
+      "task_key": "data_quality_check",
+      "description": "Run LLM-based data quality checks",
+      "notebook_task": {
+        "notebook_path": "/Repos/sales-analytics/notebooks/09_genai/llm_checker/llm_data_quality_checker",
+        "base_parameters": {}
+      },
+      "depends_on": [
+        {"task_key": "aggregate_gold"},
+        {"task_key": "enrich_customers"}
+      ],
+      "cluster_key": "shared-cluster",
+      "timeout_seconds": 600,
+      "retry_on_timeout": false
+    },
+    {
+      "task_key": "optimize_delta",
+      "description": "Optimize Delta tables and run ZORDER",
+      "notebook_task": {
+        "notebook_path": "/Repos/sales-analytics/notebooks/05_delta_lake/05_delta_features",
+        "base_parameters": {}
+      },
+      "depends_on": [
+        {"task_key": "aggregate_gold"},
+        {"task_key": "enrich_customers"}
+      ],
+      "cluster_key": "shared-cluster",
+      "timeout_seconds": 300,
+      "retry_on_timeout": false
+    }
+  ],
+  "email_notifications": {
+    "on_success": ["data-team@company.com"],
+    "on_failure": ["data-team@company.com", "alerts@company.com"],
+    "on_start": [],
+    "on_duration_threshold_exceeded": []
+  },
+  "webhook_notifications": [
+    {
+      "webhook_id": "slack-alerts",
+      "events": ["task_failed", "run_failed"],
+      "url": "{{secrets/kv-secrets/slack-webhook-url}}"
+    }
+  ],
+  "clusters": [
+    {
+      "cluster_name": "shared-cluster",
+      "spark_version": "14.3-scala12",
+      "node_type_id": "Standard_DS3_v2",
+      "num_workers": 2,
+      "autoscale": {
+        "min_workers": 1,
+        "max_workers": 4
+      },
+      "autotermination_minutes": 30,
+      "spark_conf": {
+        "spark.databricks.delta.optimizeWrite.enabled": "true",
+        "spark.databricks.delta.autoCompact.enabled": "true",
+        "spark.sql.shuffle.partitions": "8"
+      }
+    }
+  ],
+  "format": "MULTI_TASK"
+}
