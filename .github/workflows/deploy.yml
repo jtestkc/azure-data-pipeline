@@ -308,22 +308,15 @@ jobs:
       - name: Get Databricks Job ID
         id: job
         run: |
-          RESOURCE_GROUP=${{ steps.workspace.outputs.resource_group }}
-          WORKSPACE_RESOURCE_ID=${{ steps.workspace.outputs.workspace_resource_id }}
+          WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
           
-          JOB_ID=$(az resource show --ids "$WORKSPACE_RESOURCE_ID" --query properties.todayBatchRunId -o tsv 2>/dev/null || echo "")
+          TOKEN=$(az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
           
-          if [ -z "$JOB_ID" ]; then
-            WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
-            TOKEN=$(az account get-access-token --resource 2f9dc81c-5a75-4dcb-94a1-4a1d5a87f300 --query accessToken -o tsv 2>/dev/null || az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
-            
-            JOBS_JSON=$(curl -s -X GET "${WORKSPACE_URL}/api/2.1/jobs/list" \
-              -H "Authorization: Bearer $TOKEN" \
-              -H "Content-Type: application/json")
-            
-            JOB_ID=$(echo $JOBS_JSON | grep -o '"job_id":[0-9]*' | head -1 | grep -o '[0-9]*')
-          fi
+          JOBS_JSON=$(curl -s -X GET "${WORKSPACE_URL}/api/2.1/jobs/list" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json")
           
+          JOB_ID=$(echo $JOBS_JSON | grep -o '"job_id":[0-9]*' | head -1 | grep -o '[0-9]*')
           echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
 
       - name: Run Databricks Job
@@ -331,7 +324,7 @@ jobs:
           WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
           JOB_ID=${{ steps.job.outputs.job_id }}
           
-          TOKEN=$(az account get-access-token --resource 2f9dc81c-5a75-4dcb-94a1-4a1d5a87f300 --query accessToken -o tsv 2>/dev/null || az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
+          TOKEN=$(az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
           
           echo "Starting Databricks Job: $JOB_ID"
           curl -s -X POST "${WORKSPACE_URL}/api/2.1/jobs/run-now" \
