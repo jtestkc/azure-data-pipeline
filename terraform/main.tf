@@ -105,26 +105,31 @@ resource "azurerm_key_vault_access_policy" "terraform_sp" {
   secret_permissions = ["Get", "List", "Set", "Delete", "Purge", "Recover"]
 }
 
+resource "time_sleep" "wait_for_kv_policy" {
+  depends_on      = [azurerm_key_vault_access_policy.terraform_sp]
+  create_duration = "30s"
+}
+
 # ── Store secrets in Key Vault ────────────────────────────────────────────────
 resource "azurerm_key_vault_secret" "storage_account_name" {
   name         = "adls-account-name"
   value        = azurerm_storage_account.datalake.name
   key_vault_id = azurerm_key_vault.main.id
-  depends_on   = [azurerm_key_vault_access_policy.terraform_sp]
+  depends_on   = [time_sleep.wait_for_kv_policy]
 }
 
 resource "azurerm_key_vault_secret" "storage_account_key" {
   name         = "adls-storage-key"
   value        = azurerm_storage_account.datalake.primary_access_key
   key_vault_id = azurerm_key_vault.main.id
-  depends_on   = [azurerm_key_vault_access_policy.terraform_sp]
+  depends_on   = [time_sleep.wait_for_kv_policy]
 }
 
 resource "azurerm_key_vault_secret" "eventhub_connection_string" {
   name         = "eventhub-connection-string"
   value        = azurerm_eventhub_authorization_rule.listen_send.primary_connection_string
   key_vault_id = azurerm_key_vault.main.id
-  depends_on   = [azurerm_key_vault_access_policy.terraform_sp]
+  depends_on   = [time_sleep.wait_for_kv_policy]
 }
 
 
@@ -132,21 +137,21 @@ resource "azurerm_key_vault_secret" "sp_client_id" {
   name         = "sp-client-id"
   value        = var.client_id
   key_vault_id = azurerm_key_vault.main.id
-  depends_on   = [azurerm_key_vault_access_policy.terraform_sp]
+  depends_on   = [time_sleep.wait_for_kv_policy]
 }
 
 resource "azurerm_key_vault_secret" "sp_client_secret" {
   name         = "sp-client-secret"
   value        = var.client_secret
   key_vault_id = azurerm_key_vault.main.id
-  depends_on   = [azurerm_key_vault_access_policy.terraform_sp]
+  depends_on   = [time_sleep.wait_for_kv_policy]
 }
 
 resource "azurerm_key_vault_secret" "sp_tenant_id" {
   name         = "sp-tenant-id"
   value        = var.tenant_id
   key_vault_id = azurerm_key_vault.main.id
-  depends_on   = [azurerm_key_vault_access_policy.terraform_sp]
+  depends_on   = [time_sleep.wait_for_kv_policy]
 }
 
 # ============================================================================
@@ -216,7 +221,7 @@ resource "databricks_cluster" "main" {
   spark_version           = var.spark_version
   node_type_id            = var.cluster_node_type
   autotermination_minutes = var.cluster_autotermination_minutes
-  num_workers             = var.cluster_min_workers
+  num_workers             = 0 # MUST be 0 for SingleNode cluster, otherwise it hangs waiting for workers
 
   # ✅ FIXED: Use NONE for service principal authentication
   # SINGLE_USER requires a user email, not a service principal client_id
@@ -274,7 +279,7 @@ resource "databricks_secret_scope" "keyvault" {
 
   depends_on = [
     azurerm_key_vault.main,
-    azurerm_key_vault_access_policy.terraform_sp,
+    time_sleep.wait_for_kv_policy,
     azurerm_databricks_workspace.main
   ]
 }
