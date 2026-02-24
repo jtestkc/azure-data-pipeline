@@ -3,7 +3,7 @@
 # Section 3.2: Medallion Architecture - Gold Aggregation
 # Revenue by region/day, top products, customer lifetime value with window functions
 
-from pyspark.sql.functions import sum, count, avg, max, min, row_number, dense_rank
+from pyspark.sql.functions import sum, count, avg, max, min, row_number, dense_rank, col, datediff
 from pyspark.sql.window import Window
 from pyspark.sql import SparkSession
 import re
@@ -58,7 +58,8 @@ display(daily_revenue.limit(20))
 # ============================================================================
 # AGGREGATION 2: TOP PRODUCTS
 # ============================================================================
-product_window = Window.partitionBy("event_date").orderBy(sum("total_price").desc())
+# Fixed window logic: use 'revenue' (aggregated sum) instead of raw 'total_price'
+product_window = Window.partitionBy("event_date").orderBy(col("revenue").desc())
 
 top_products = silver_df.groupBy("product_id", "product_name", "event_date").agg(
     sum("total_price").alias("revenue"),
@@ -94,7 +95,7 @@ customer_ltv = silver_df.groupBy("customer_id", "region").agg(
     max("event_date").alias("last_order_date")
 ).withColumn(
     "days_as_customer",
-    col("last_order_date") - col("first_order_date")
+    datediff(col("last_order_date"), col("first_order_date"))
 ).withColumn(
     "orders_per_month",
     col("total_orders") / (col("days_as_customer") / 30.0 + 1)
