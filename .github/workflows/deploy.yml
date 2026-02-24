@@ -37,11 +37,6 @@ on:
           - standard
           - premium
 
-  workflow_run:
-    workflows: ["Deploy Azure Databricks Pipeline"]
-    types: [completed]
-    branches: [main]
-
 # =============================================================================
 # SECRETS TO CONFIGURE IN GITHUB (Settings > Secrets > Actions):
 # =============================================================================
@@ -279,80 +274,6 @@ jobs:
         run: |
           echo "## Cleanup Complete" >> $GITHUB_STEP_SUMMARY
           echo "All resources created during failed deployment have been destroyed." >> $GITHUB_STEP_SUMMARY
-
-  # ==========================================================================
-  # AUTO CLEANUP - Run when workflow fails via workflow_run trigger
-  # ==========================================================================
-  auto-cleanup:
-    name: Auto Cleanup on Failure
-    runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download Failed Workflow Logs
-        uses: actions/download-artifact@v4
-        with:
-          name: apply-output
-        if: github.event.workflow_run.run_attempt == 1
-
-      - name: Save Error Log
-        if: github.event.workflow_run.run_attempt == 1
-        run: |
-          echo "## 🚨 Previous Workflow Failed" >> $GITHUB_STEP_SUMMARY
-          echo "Run ID: ${{ github.event.workflow_run.id }}" >> $GITHUB_STEP_SUMMARY
-          echo "Run URL: ${{ github.event.workflow_run.html_url }}" >> $GITHUB_STEP_SUMMARY
-          if [ -f apply_output.txt ]; then
-            echo "## Error Output:" >> $GITHUB_STEP_SUMMARY
-            cat apply_output.txt >> $GITHUB_STEP_SUMMARY
-          fi
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Create terraform.tfvars
-        run: |
-          cat > terraform/terraform.tfvars << 'EOF'
-          subscription_id = "${{ secrets.ARM_SUBSCRIPTION_ID }}"
-          tenant_id       = "${{ secrets.ARM_TENANT_ID }}"
-          client_id       = "${{ secrets.ARM_CLIENT_ID }}"
-          client_secret   = "${{ secrets.ARM_CLIENT_SECRET }}"
-          prefix          = "${{ env.PREFIX }}"
-          location        = "${{ env.LOCATION }}"
-          environment     = "dev"
-          databricks_sku  = "trial"
-          sql_admin_password = "${{ secrets.SQL_ADMIN_PASSWORD }}"
-          eventhub_sku           = "Standard"
-          cluster_max_workers    = 1
-          cluster_autotermination_minutes = 5
-          spark_version          = "14.3.x-scala2.12"
-          sql_database_sku       = "Free"
-          github_pat            = ""
-          EOF
-
-      - name: Terraform Init
-        run: cd terraform && terraform init -upgrade 2>&1 || true
-
-      - name: Terraform Destroy
-        run: |
-          echo "## 🧹 Auto-Cleanup: Destroying Resources from Failed Run" >> $GITHUB_STEP_SUMMARY
-          cd terraform && terraform destroy -auto-approve -no-color 2>&1 | tee auto_destroy_output.txt
-        env:
-          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-
-      - name: Upload Auto Destroy Output
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: auto-destroy-output
-          path: auto_destroy_output.txt
-          retention-days: 7
 
   # ==========================================================================
   # DESTROY - Clean up all resources (use with caution!)
