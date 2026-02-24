@@ -281,7 +281,7 @@ jobs:
   run-pipeline:
     name: Run Databricks Pipeline
     runs-on: ubuntu-latest
-    needs: deploy
+    needs: plan
     if: github.event.inputs.action == 'run-pipeline' || github.event.inputs.action == 'full-cycle'
     steps:
       - name: Checkout code
