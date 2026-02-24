@@ -403,7 +403,6 @@ jobs:
   destroy:
     name: Terraform Destroy
     runs-on: ubuntu-latest
-    needs: plan
     if: github.event.inputs.action == 'destroy'
     environment: production
     steps:
