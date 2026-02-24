@@ -287,66 +287,53 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - name: Azure Login
+        uses: azure/login@v1
         with:
-          terraform_version: ${{ env.TF_VERSION }}
+          creds: '{"clientId": "${{ secrets.ARM_CLIENT_ID }}", "clientSecret": "${{ secrets.ARM_CLIENT_SECRET }}", "subscriptionId": "${{ secrets.ARM_SUBSCRIPTION_ID }}", "tenantId": "${{ secrets.ARM_TENANT_ID }}"}'
 
-      - name: Create terraform.tfvars
-        run: |
-          cat > terraform/terraform.tfvars << 'EOF'
-          subscription_id = "${{ secrets.ARM_SUBSCRIPTION_ID }}"
-          tenant_id       = "${{ secrets.ARM_TENANT_ID }}"
-          client_id       = "${{ secrets.ARM_CLIENT_ID }}"
-          client_secret   = "${{ secrets.ARM_CLIENT_SECRET }}"
-          prefix          = "${{ env.PREFIX }}"
-          location        = "${{ env.LOCATION }}"
-          environment     = "${{ github.event.inputs.environment }}"
-          databricks_sku  = "${{ github.event.inputs.databricks_sku }}"
-          sql_admin_password = "${{ secrets.SQL_ADMIN_PASSWORD }}"
-          eventhub_sku           = "Standard"
-          cluster_max_workers    = 1
-          cluster_autotermination_minutes = 10
-          spark_version          = "14.3.x-scala2.12"
-          sql_database_sku       = "Free"
-          github_pat            = ""
-          EOF
-
-      - name: Terraform Init
-        run: cd terraform && terraform init -upgrade
-
-      - name: Get Databricks Workspace URL
+      - name: Get Databricks Workspace Details
         id: workspace
         run: |
-          cd terraform && terraform init -upgrade
-          WORKSPACE_URL=$(cd terraform && terraform output -raw databricks_workspace_url 2>/dev/null || echo "")
-          echo "workspace_url=$WORKSPACE_URL" >> $GITHUB_OUTPUT
+          RESOURCE_GROUP=$(az group list --query "[?contains(name, 'rg-rtsa') && contains(name, '-dev')].name | [0]" -o tsv)
+          echo "resource_group=$RESOURCE_GROUP" >> $GITHUB_OUTPUT
+          
+          WORKSPACE_URL=$(az databricks workspace show -g "$RESOURCE_GROUP" --query workspaceUrl -o tsv)
+          echo "workspace_url=https://$WORKSPACE_URL" >> $GITHUB_OUTPUT
+          
+          WORKSPACE_RESOURCE_ID=$(az databricks workspace show -g "$RESOURCE_GROUP" --query id -o tsv)
+          echo "workspace_resource_id=$WORKSPACE_RESOURCE_ID" >> $GITHUB_OUTPUT
 
       - name: Get Databricks Job ID
         id: job
         run: |
-          cd terraform && terraform init -upgrade
-          JOB_ID=$(cd terraform && terraform output -raw databricks_job_id 2>/dev/null || echo "")
+          RESOURCE_GROUP=${{ steps.workspace.outputs.resource_group }}
+          WORKSPACE_RESOURCE_ID=${{ steps.workspace.outputs.workspace_resource_id }}
+          
+          JOB_ID=$(az resource show --ids "$WORKSPACE_RESOURCE_ID" --query properties.todayBatchRunId -o tsv 2>/dev/null || echo "")
+          
+          if [ -z "$JOB_ID" ]; then
+            WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
+            TOKEN=$(az account get-access-token --resource 2f9dc81c-5a75-4dcb-94a1-4a1d5a87f300 --query accessToken -o tsv 2>/dev/null || az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
+            
+            JOBS_JSON=$(curl -s -X GET "${WORKSPACE_URL}/api/2.1/jobs/list" \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "Content-Type: application/json")
+            
+            JOB_ID=$(echo $JOBS_JSON | grep -o '"job_id":[0-9]*' | head -1 | grep -o '[0-9]*')
+          fi
+          
           echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
-
-      - name: Get Databricks Token
-        run: |
-          DATABRICKS_HOST=${{ steps.workspace.outputs.workspace_url }}
-          RESPONSE=$(curl -s -X POST "${DATABRICKS_HOST}/api/2.0/token-management/tokens" \
-            -H "Authorization: Bearer ${{ secrets.ARM_CLIENT_SECRET }}" \
-            -H "Content-Type: application/json" \
-            -d '{"lifetime_seconds": 3600, "comment": "GitHub Actions token"}' 2>/dev/null || echo '{"token_value": ""}')
-          TOKEN=$(echo $RESPONSE | grep -o '"token_value":"[^"]*' | cut -d'"' -f4)
-          echo "token=$TOKEN" >> $GITHUB_OUTPUT
 
       - name: Run Databricks Job
         run: |
-          DATABRICKS_HOST=${{ steps.workspace.outputs.workspace_url }}
+          WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
           JOB_ID=${{ steps.job.outputs.job_id }}
-          TOKEN=${{ secrets.ARM_CLIENT_SECRET }}
+          
+          TOKEN=$(az account get-access-token --resource 2f9dc81c-5a75-4dcb-94a1-4a1d5a87f300 --query accessToken -o tsv 2>/dev/null || az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
           
           echo "Starting Databricks Job: $JOB_ID"
-          curl -s -X POST "${DATABRICKS_HOST}/api/2.1/jobs/run-now" \
+          curl -s -X POST "${WORKSPACE_URL}/api/2.1/jobs/run-now" \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
             -d "{\"job_id\": $JOB_ID}"
