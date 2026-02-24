@@ -7,8 +7,6 @@
 terraform {
   required_version = ">= 1.5.0"
 
-  backend "azurerm" {}
-
   required_providers {
     # AzureRM — main Azure resource manager
     azurerm = {
@@ -29,6 +27,11 @@ terraform {
     random = {
       source  = "hashicorp/random"
       version = "~> 3.6"
+    }
+    # GitHub — manages repository secrets
+    github = {
+      source  = "integrations/github"
+      version = "~> 6.0"
     }
   }
 }
@@ -70,4 +73,9 @@ provider "databricks" {
   azure_client_id             = var.client_id
   azure_client_secret         = var.client_secret
   azure_tenant_id             = var.tenant_id
+}
+
+# ── GitHub Provider ─────────────────────────────────────────────────────────
+provider "github" {
+  token = var.github_pat
 }

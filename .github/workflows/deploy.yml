@@ -92,7 +92,7 @@ jobs:
           cluster_autotermination_minutes = 10
           spark_version          = "14.3.x-scala2.12"
           sql_database_sku       = "Free"
-          github_pat            = ""
+          github_pat            = "${{ secrets.GH_PAT }}"
           EOF
 
       - name: Setup Terraform Backend
@@ -176,7 +176,7 @@ jobs:
           cluster_autotermination_minutes = 10
           spark_version          = "14.3.x-scala2.12"
           sql_database_sku       = "Free"
-          github_pat            = ""
+          github_pat            = "${{ secrets.GH_PAT }}"
           EOF
 
       - name: Setup Terraform Backend
@@ -452,7 +452,7 @@ jobs:
           cluster_autotermination_minutes = 10
           spark_version          = "14.3.x-scala2.12"
           sql_database_sku       = "Free"
-          github_pat            = ""
+          github_pat            = "${{ secrets.GH_PAT }}"
           EOF
 
       - name: Setup Terraform Backend

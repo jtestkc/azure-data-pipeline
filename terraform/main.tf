@@ -461,3 +461,14 @@ resource "databricks_token" "sp_token" {
   comment          = "GitHub Actions Token"
   lifetime_seconds = 2592000 # 30 days
 }
+
+# ============================================================================
+# ZERO-TOUCH CI/CD AUTOCONFIGURATION
+# ============================================================================
+# Automatically inject the Databricks token into the GitHub repository secrets so
+# subsequent GitHub Actions can authenticate with Databricks without human intervention.
+resource "github_actions_secret" "databricks_token" {
+  repository      = "azure-data-pipeline"
+  secret_name     = "DATABRICKS_TOKEN"
+  plaintext_value = databricks_token.sp_token.token_value
+}
