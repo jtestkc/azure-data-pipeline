@@ -94,3 +94,9 @@ output "databricks_job_id" {
   description = "The ID of the Databricks workflow job to trigger"
   value       = databricks_job.pipeline.id
 }
+
+output "databricks_pat_token" {
+  description = "Databricks PAT token for GitHub Actions (30 days expiry)"
+  value       = databricks_token.sp_token.token_value
+  sensitive   = true
+}
