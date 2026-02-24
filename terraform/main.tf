@@ -468,17 +468,3 @@ resource "databricks_token" "sp_token" {
   comment          = "GitHub Actions Token"
   lifetime_seconds = 2592000 # 30 days
 }
-
-resource "databricks_entitlements" "sp_privileges" {
-  provider             = databricks.workspace
-  service_principal_id = databricks_service_principal.terraform_sp.id
-  workspace_access     = true
-  allow_cluster_create = true
-}
-
-# 4. Create PAT token for Service Principal (for GitHub Actions)
-resource "databricks_token" "sp_token" {
-  provider         = databricks.workspace
-  comment          = "GitHub Actions Token"
-  lifetime_seconds = 2592000 # 30 days
-}
