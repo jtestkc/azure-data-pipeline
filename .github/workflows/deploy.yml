@@ -45,7 +45,7 @@ on:
 # ARM_CLIENT_ID         - Service Principal App ID
 # ARM_CLIENT_SECRET     - Service Principal Secret
 # SQL_ADMIN_PASSWORD    - SQL Server admin password
-# GITHUB_PAT           - GitHub PAT with repo scope
+# github_pat           - GitHub PAT with repo scope
 # =============================================================================
 
 env:
@@ -88,7 +88,7 @@ jobs:
           environment     = "${{ github.event.inputs.environment }}"
           databricks_sku  = "${{ github.event.inputs.databricks_sku }}"
           sql_admin_password = "${{ secrets.SQL_ADMIN_PASSWORD }}"
-          github_pat       = "${{ secrets.GITHUB_PAT }}
+          github_pat       = "${{ secrets.github_pat }}
           
           # Budget optimizations
           eventhub_sku           = "Standard"
@@ -156,7 +156,7 @@ jobs:
           environment     = "${{ github.event.inputs.environment }}"
           databricks_sku  = "${{ github.event.inputs.databricks_sku }}"
           sql_admin_password = "${{ secrets.SQL_ADMIN_PASSWORD }}"
-          github_pat       = "${{ secrets.GITHUB_PAT }}
+          github_pat       = "${{ secrets.github_pat }}
           
           # Budget optimizations
           eventhub_sku           = "Standard"
@@ -220,7 +220,7 @@ jobs:
           environment     = "${{ github.event.inputs.environment }}"
           databricks_sku  = "${{ github.event.inputs.databricks_sku }}"
           sql_admin_password = "${{ secrets.SQL_ADMIN_PASSWORD }}"
-          github_pat       = "${{ secrets.GITHUB_PAT }}
+          github_pat       = "${{ secrets.github_pat }}
           
           # Budget optimizations
           eventhub_sku           = "Standard"
