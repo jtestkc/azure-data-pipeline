@@ -70,7 +70,7 @@ variable "databricks_sku" {
 variable "cluster_node_type" {
   description = "VM size for Databricks cluster workers."
   type        = string
-  default     = "Standard_DS3_v2" # ✅ Smaller = cheaper ($0.04/hr vs $0.17/hr)
+  default     = "Standard_D4s_v3" # More commonly available in eastus
 }
 
 variable "cluster_min_workers" {
