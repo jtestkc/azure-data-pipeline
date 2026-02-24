@@ -305,6 +305,7 @@ resource "azurerm_log_analytics_workspace" "main" {
 # DATABRICKS GIT CREDENTIALS
 # ============================================================================
 resource "databricks_git_credential" "personal_pat" {
+  count                 = var.github_pat != "" ? 1 : 0
   git_provider          = "github"
   git_username          = "jtestkc"
   personal_access_token = var.github_pat
@@ -314,13 +315,15 @@ resource "databricks_git_credential" "personal_pat" {
 # DATABRICKS REPO
 # ============================================================================
 resource "databricks_repo" "analytics_pipeline" {
+  count      = var.github_pat != "" ? 1 : 0
   url        = "https://github.com/jtestkc/azure-data-pipeline"
   path       = "/Repos/jtestkc/azure-data-pipeline"
-  depends_on = [databricks_git_credential.personal_pat]
+  depends_on = databricks_git_credential.personal_pat
 }
 
 resource "databricks_permissions" "repo_access" {
-  repo_id = databricks_repo.analytics_pipeline.id
+  count   = var.github_pat != "" ? 1 : 0
+  repo_id = databricks_repo.analytics_pipeline[0].id
 
   access_control {
     service_principal_name = var.client_id

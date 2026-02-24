@@ -151,4 +151,5 @@ variable "github_pat" {
   description = "GitHub Personal Access Token for Databricks Repo connection"
   type        = string
   sensitive   = true
+  default     = ""
 }
