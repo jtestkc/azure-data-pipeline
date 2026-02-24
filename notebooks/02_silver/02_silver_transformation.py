@@ -1,3 +1,4 @@
+# Databricks notebook source
 # Databricks Notebook: Silver Layer - Data Transformation
 # Section 3.1: Medallion Architecture - Silver Transformation
 # Null handling, deduplication, type casting
@@ -7,18 +8,26 @@ from pyspark.sql.functions import col, when, count, lag, lead, row_number
 from pyspark.sql.window import Window
 from pyspark.sql.types import IntegerType, DoubleType, StringType
 import delta
+import re
+
+def sanitize_secret(secret_value):
+    if not secret_value: return ""
+    return re.sub(r'[\s\x00-\x1F\x7F-\x9F]', '', secret_value)
 
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
-CATALOG_NAME = "sales_catalog"
-BRONZE_TABLE = f"{CATALOG_NAME}.bronze.orders"
-SILVER_TABLE = f"{CATALOG_NAME}.silver.orders"
+ADLS_ACCOUNT_NAME = sanitize_secret(dbutils.secrets.get("kv-secrets", "adls-account-name"))
+CONTAINER_NAME = "rawdata"
+ROOT_PATH = f"abfss://{CONTAINER_NAME}@{ADLS_ACCOUNT_NAME}.dfs.core.windows.net"
+
+BRONZE_PATH = f"{ROOT_PATH}/bronze/orders"
+SILVER_PATH = f"{ROOT_PATH}/silver/orders"
 
 # ============================================================================
 # READ FROM BRONZE LAYER
 # ============================================================================
-bronze_df = spark.read.format("delta").table(BRONZE_TABLE)
+bronze_df = spark.read.format("delta").load(BRONZE_PATH)
 
 print("Bronze layer schema:")
 bronze_df.printSchema()
@@ -96,14 +105,11 @@ final_df = deduped_df.withColumn(
 # ============================================================================
 from delta.tables import DeltaTable
 
-spark.sql(f"CREATE CATALOG IF NOT EXISTS {CATALOG_NAME}")
-spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOG_NAME}.silver")
-
-if DeltaTable.isDeltaTable(spark, f"{CATALOG_NAME}.silver.orders"):
-    delta_table = DeltaTable.forName(spark, SILVER_TABLE)
+if DeltaTable.isDeltaTable(spark, SILVER_PATH):
+    delta_table = DeltaTable.forPath(spark, SILVER_PATH)
     
-    delta_table.merge(
-        final_df,
+    delta_table.alias("silver").merge(
+        final_df.alias("bronze"),
         "bronze.order_id = silver.order_id"
     ).whenMatchedUpdateAll() \
      .whenNotMatchedInsertAll() \
@@ -113,15 +119,15 @@ if DeltaTable.isDeltaTable(spark, f"{CATALOG_NAME}.silver.orders"):
 else:
     final_df.write.format("delta") \
         .mode("overwrite") \
-        .saveAsTable(SILVER_TABLE)
+        .save(SILVER_PATH)
     
-    print(f"Created Silver table with {final_df.count()} records")
+    print(f"Created Silver Delta Log with {final_df.count()} records")
 
 # ============================================================================
 # VERIFY SILVER LAYER
 # ============================================================================
-silver_count = spark.read.format("delta").table(SILVER_TABLE).count()
+silver_count = spark.read.format("delta").load(SILVER_PATH).count()
 print(f"Total records in Silver layer: {silver_count}")
 
 # Show sample data
-display(spark.read.format("delta").table(SILVER_TABLE).limit(10))
+display(spark.read.format("delta").load(SILVER_PATH).limit(10))

@@ -1,53 +1,79 @@
-# Databricks Notebook: Bronze Layer - Streaming Ingestion from Event Hubs
-# Section 2: Data Ingestion (Streaming)
+# Databricks notebook source
+# Databricks Notebook: Bronze Layer - Streaming Ingestion from Event Hubs via Kafka
 # Ingests real-time order events from Event Hubs into Delta Lake (Bronze)
 
-from pyspark.sql.functions import from_json, col, to_timestamp, current_timestamp
+from pyspark.sql.functions import from_json, col, to_timestamp, current_timestamp, current_date
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType, DateType, TimestampType
-import json
+import re
 
 # ============================================================================
-# CONFIGURATION
+# CONFIGURATION - Get secrets from Key Vault
 # ============================================================================
+
+# Get Event Hubs connection string from Key Vault
 EVENTHUB_CONNECTION_STRING = dbutils.secrets.get("kv-secrets", "eventhub-connection-string")
 EVENTHUB_NAME = "orders"
-CONSUMER_GROUP = "$Default"
 
+# Get Azure Storage credentials
 ADLS_ACCOUNT_NAME = dbutils.secrets.get("kv-secrets", "adls-account-name")
-CONTAINER_NAME = "rawdata"
-MOUNT_POINT = "/mnt/datalake"
+ADLS_STORAGE_KEY = dbutils.secrets.get("kv-secrets", "adls-storage-key")
 
-CATALOG_NAME = "sales_catalog"
-SCHEMA_NAME = "bronze"
-TABLE_NAME = "orders"
+# Configure Spark to access ADLS Gen2
+spark.conf.set(f"fs.azure.account.key.{ADLS_ACCOUNT_NAME}.dfs.core.windows.net", ADLS_STORAGE_KEY)
 
 # ============================================================================
-# MOUNT ADLS GEN2
+# EXTRACT KAFKA CONFIGURATION FROM CONNECTION STRING
 # ============================================================================
-def mount_adls():
-    configs = {
-        "fs.azure.account.auth.type": "OAuth",
-        "fs.azure.account.oauth.provider.type": "org.apache.hadoop.fs.azurebfs.oauth2.ClientCredsTokenProvider",
-        "fs.azure.account.oauth2.client.id": dbutils.secrets.get("kv-secrets", "sp-client-id"),
-        "fs.azure.account.oauth2.client.secret": dbutils.secrets.get("kv-secrets", "sp-client-secret"),
-        "fs.azure.account.oauth2.client.endpoint": f"https://login.microsoftonline.com/{dbutils.secrets.get('kv-secrets', 'sp-tenant-id')}/oauth2/token"
-    }
-    
-    dbutils.fs.mount(
-        source=f"abfss://{CONTAINER_NAME}@{ADLS_ACCOUNT_NAME}.dfs.core.windows.net/",
-        mount_point=MOUNT_POINT,
-        extra_configs=configs
-    )
 
-try:
-    mount_adls()
-    print(f"ADLS mounted successfully at {MOUNT_POINT}")
-except Exception as e:
-    print(f"ADLS already mounted or error: {e}")
+# Extract namespace FQDN from connection string
+# Format: Endpoint=sb://<namespace>.servicebus.windows.net/;...
+namespace_match = re.search(r'Endpoint=sb://([^/;\s]+)', EVENTHUB_CONNECTION_STRING)
+
+if not namespace_match:
+    raise ValueError("FATAL: Could not parse Event Hubs namespace from connection string")
+
+EVENTHUB_NAMESPACE = namespace_match.group(1)
+KAFKA_BOOTSTRAP_SERVERS = f"{EVENTHUB_NAMESPACE}.servicebus.windows.net:9093"
+
+# ============================================================================
+# ✅ CRITICAL: BUILD KAFKA-CONFIGURATION
+# The Event Hubs connection string must have EntityPath appended for Kafka protocol
+# JAAS config must use kafkashaded prefix (NOT the old azure-eventhubs-spark library)
+# ============================================================================
+
+kafka_password = f"{EVENTHUB_CONNECTION_STRING};EntityPath={EVENTHUB_NAME}"
+
+KAFKA_JAAS_CONFIG = (
+    f"kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule "
+    f"required username=\"$ConnectionString\" "
+    f"password=\"{kafka_password}\";"
+)
+
+# Kafka configuration options
+kafka_options = {
+    "kafka.bootstrap.servers": KAFKA_BOOTSTRAP_SERVERS,
+    "kafka.sasl.mechanism": "PLAIN",
+    "kafka.security.protocol": "SASL_SSL",
+    "kafka.sasl.jaas.config": KAFKA_JAAS_CONFIG,
+    "kafka.subscribe": EVENTHUB_NAME,
+    "kafka.startingOffsets": "earliest",
+    "kafka.maxOffsetsPerTrigger": "1000",
+    "kafka.request.timeout.ms": "60000",
+    "kafka.session.timeout.ms": "30000"
+}
+
+print("=" * 70)
+print("KAFKA CONFIGURATION")
+print("=" * 70)
+print(f"Bootstrap Servers: {KAFKA_BOOTSTRAP_SERVERS}")
+print(f"Topic: {EVENTHUB_NAME}")
+print(f"Security: SASL_SSL + PLAIN")
+print("=" * 70)
 
 # ============================================================================
 # DEFINE SCHEMA FOR ORDER EVENTS
 # ============================================================================
+
 order_schema = StructType([
     StructField("order_id", StringType(), False),
     StructField("customer_id", StringType(), False),
@@ -61,52 +87,72 @@ order_schema = StructType([
 ])
 
 # ============================================================================
-# CREATE STREAMING DATAFRAME FROM EVENT HUBS
+# CREATE STREAMING DATAFRAME FROM EVENT HUBS VIA KAFKA
 # ============================================================================
-eh_conf = {
-    "eventhubs.connectionString": EVENTHUB_CONNECTION_STRING,
-    "eventhubs.consumerGroup": CONSUMER_GROUP,
-    "startingPosition": "earliest"
-}
+
+print("\n📡 Connecting to Event Hubs via Kafka protocol...")
 
 streaming_df = (
     spark.readStream
-    .format("eventhubs")
-    .options(**eh_conf)
+    .format("kafka")
+    .options(**kafka_options)
     .load()
 )
 
-# Parse JSON payload
-parsed_df = streaming_df.withColumn("body", col("body").cast("string")) \
-    .withColumn("data", from_json(col("body"), order_schema)) \
-    .select("data.*", "enqueuedTime", "sequenceNumber")
+print(f"✅ Connected! Kafka schema: {streaming_df.schema.json()}")
 
-# Add derived columns
-bronze_df = parsed_df \
-    .withColumn("order_timestamp", to_timestamp(col("order_timestamp"))) \
-    .withColumn("event_date", col("order_timestamp").cast("date")) \
+# Parse JSON payload from Kafka message value
+parsed_df = streaming_df.select(
+    from_json(col("value").cast("string"), order_schema).alias("data")
+).select("data.*")
+
+# Add metadata columns
+bronze_df = (
+    parsed_df
+    .withColumn("order_timestamp", to_timestamp(col("order_timestamp")))
+    .withColumn("event_date", col("order_timestamp").cast("date"))
     .withColumn("ingestion_timestamp", current_timestamp())
+)
+
+print(f"✅ Parsed! Bronze schema: {bronze_df.schema.json()}")
 
 # ============================================================================
-# WRITE TO DELTA LAKE (BRONZE LAYER) - 2 MINUTE TRIGGER, PARTITION BY EVENT_DATE
+# WRITE TO DELTA LAKE BRONZE LAYER
 # ============================================================================
-checkpoint_path = f"{MOUNT_POINT}/checkpoints/bronze_orders"
-output_path = f"{MOUNT_POINT}/bronze/orders"
 
+CONTAINER_NAME = "rawdata"
+ROOT_PATH = f"abfss://{CONTAINER_NAME}@{ADLS_ACCOUNT_NAME}.dfs.core.windows.net"
+
+checkpoint_path = f"{ROOT_PATH}/_checkpoints/bronze_orders"
+output_path = f"{ROOT_PATH}/bronze/orders"
+
+# Widget to reset checkpoint if needed
+dbutils.widgets.text("reset_checkpoint", "false", "Reset Checkpoint (true/false)")
+if dbutils.widgets.get("reset_checkpoint").lower() == "true":
+    print(f"🗑️  RESETTING CHECKPOINT: {checkpoint_path}")
+    dbutils.fs.rm(checkpoint_path, True)
+
+# Start streaming query
 query = (
-    bronze_df.writeStream
+    bronze_df
+    .writeStream
     .format("delta")
     .outputMode("append")
     .option("checkpointLocation", checkpoint_path)
+    .option("path", output_path)
     .trigger(processingTime="2 minutes")
-    .partitionBy("event_date")
-    .start(output_path)
+    .start()
 )
 
-print(f"Streaming query started. Writing to: {output_path}")
-print(f"Checkpoint location: {checkpoint_path}")
-print(f"Trigger interval: 2 minutes")
-print(f"Partitioning by: event_date")
+print("=" * 70)
+print("✅ BRONZE STREAMING PIPELINE STARTED!")
+print("=" * 70)
+print(f"📍 Output Path: {output_path}")
+print(f"📍 Checkpoint: {checkpoint_path}")
+print(f"📡 Event Hub: {EVENTHUB_NAMESPACE}/{EVENTHUB_NAME}")
+print(f"⏱️  Trigger: Every 2 minutes")
+print(f"📊 Partition: event_date")
+print("=" * 70)
 
-# Wait for query to start
+# Wait for query to terminate (or stop manually)
 query.awaitTermination()

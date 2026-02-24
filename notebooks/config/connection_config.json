@@ -2,7 +2,7 @@
   "adls_gen2": {
     "account_name": "{{secrets/kv-secrets/adls-account-name}}",
     "container_name": "rawdata",
-    "mount_point": "/mnt/datalake",
+    "root_path": "abfss://rawdata@{{secrets/kv-secrets/adls-account-name}}.dfs.core.windows.net",
     "oauth2_config": {
       "client_id": "{{secrets/kv-secrets/sp-client-id}}",
       "client_secret": "{{secrets/kv-secrets/sp-client-secret}}",

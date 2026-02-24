@@ -15,6 +15,25 @@ terraform.tfvars
 *.tfstate
 *.tfstate.*
 
+# Terraform local provider cache (downloads automatically)
+.terraform/
+terraform/.terraform/
+
+# Terraform plan output files
+*.plan
+tfplan
+terraform/tfplan
+
+# Terraform output/error logs
+*_output.txt
+*_apply.txt
+*_plan.txt
+terraform/*_output.txt
+terraform/*_apply.txt
+terraform/*_plan.txt
+terraform/temp_*
+terraform/valid_skus.json
+
 # Terraform lock files (can contain provider versions)
 # NOTE: We DO commit .terraform.lock.hcl for reproducibility
 # But NEVER commit the local state backup
@@ -85,11 +104,21 @@ sp_credentials.json
 # TEMPORARY FILES
 # -----------------------------------------------------------------------------
 
-# OS files
-.DS_Store
-Thumbs.db
-ehthumbs.db
-Desktop.ini
+# Data files (generated locally, not needed in repo)
+data/*.json
+data/*.jsonl
+data/*.csv
+data/sql_sample/
+!data/.gitkeep
+
+# MLflow experiments (local)
+mlflow_experiments/
+
+# Temporary/deployment logs
+stage2_3rd_try.txt
+error_*.txt
+deploy_stage*.txt
+deploy_output.txt
 
 # Editor files
 .idea/
@@ -117,9 +146,6 @@ temp/
 # Documentation
 README.md
 *.md
-
-# GitHub Actions workflows
-.github/
 
 # Scripts (if they don't contain secrets)
 scripts/

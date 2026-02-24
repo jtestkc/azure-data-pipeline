@@ -1,3 +1,4 @@
+# Databricks notebook source
 # Databricks Notebook: Gold Layer - Aggregation & Business Metrics
 # Section 3.2: Medallion Architecture - Gold Aggregation
 # Revenue by region/day, top products, customer lifetime value with window functions
@@ -5,20 +6,31 @@
 from pyspark.sql.functions import sum, count, avg, max, min, row_number, dense_rank
 from pyspark.sql.window import Window
 from pyspark.sql import SparkSession
+import re
+
+def sanitize_secret(secret_value):
+    if not secret_value: return ""
+    return re.sub(r'[\s\x00-\x1F\x7F-\x9F]', '', secret_value)
 
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
-CATALOG_NAME = "sales_catalog"
-SILVER_TABLE = f"{CATALOG_NAME}.silver.orders"
+ADLS_ACCOUNT_NAME = sanitize_secret(dbutils.secrets.get("kv-secrets", "adls-account-name"))
+CONTAINER_NAME = "rawdata"
+ROOT_PATH = f"abfss://{CONTAINER_NAME}@{ADLS_ACCOUNT_NAME}.dfs.core.windows.net"
 
-spark.sql(f"CREATE CATALOG IF NOT EXISTS {CATALOG_NAME}")
-spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOG_NAME}.gold")
+SILVER_PATH = f"{ROOT_PATH}/silver/orders"
+GOLD_BASE_PATH = f"{ROOT_PATH}/gold"
+
+DAILY_REVENUE_PATH = f"{GOLD_BASE_PATH}/daily_revenue"
+TOP_PRODUCTS_PATH = f"{GOLD_BASE_PATH}/top_products"
+CUSTOMER_LTV_PATH = f"{GOLD_BASE_PATH}/customer_ltv"
+REGIONAL_PERF_PATH = f"{GOLD_BASE_PATH}/regional_performance"
 
 # ============================================================================
 # READ FROM SILVER LAYER
 # ============================================================================
-silver_df = spark.read.format("delta").table(SILVER_TABLE)
+silver_df = spark.read.format("delta").load(SILVER_PATH)
 
 print(f"Reading {silver_df.count()} records from Silver layer")
 silver_df.printSchema()
@@ -38,7 +50,7 @@ daily_revenue = silver_df.groupBy("region", "event_date").agg(
 daily_revenue.write.format("delta") \
     .mode("overwrite") \
     .option("overwriteSchema", "true") \
-    .saveAsTable(f"{CATALOG_NAME}.gold.daily_revenue")
+    .save(DAILY_REVENUE_PATH)
 
 print("Daily revenue aggregation completed")
 display(daily_revenue.limit(20))
@@ -62,7 +74,7 @@ top_products_with_rank = top_products.withColumn(
 top_products_with_rank.write.format("delta") \
     .mode("overwrite") \
     .option("overwriteSchema", "true") \
-    .saveAsTable(f"{CATALOG_NAME}.gold.top_products")
+    .save(TOP_PRODUCTS_PATH)
 
 print("Top products aggregation completed")
 display(top_products_with_rank.limit(20))
@@ -91,7 +103,7 @@ customer_ltv = silver_df.groupBy("customer_id", "region").agg(
 customer_ltv.write.format("delta") \
     .mode("overwrite") \
     .option("overwriteSchema", "true") \
-    .saveAsTable(f"{CATALOG_NAME}.gold.customer_ltv")
+    .save(CUSTOMER_LTV_PATH)
 
 print("Customer LTV aggregation completed")
 display(customer_ltv.limit(20))
@@ -114,7 +126,7 @@ regional_perf = silver_df.groupBy("region").agg(
 regional_perf.write.format("delta") \
     .mode("overwrite") \
     .option("overwriteSchema", "true") \
-    .saveAsTable(f"{CATALOG_NAME}.gold.regional_performance")
+    .save(REGIONAL_PERF_PATH)
 
 print("Regional performance aggregation completed")
 display(regional_perf)
@@ -123,7 +135,12 @@ display(regional_perf)
 # VERIFY GOLD LAYER
 # ============================================================================
 print("\n=== Gold Layer Tables ===")
-gold_tables = ["daily_revenue", "top_products", "customer_ltv", "regional_performance"]
-for table in gold_tables:
-    count = spark.read.format("delta").table(f"{CATALOG_NAME}.gold.{table}").count()
-    print(f"{table}: {count} records")
+gold_paths = {
+    "daily_revenue": DAILY_REVENUE_PATH,
+    "top_products": TOP_PRODUCTS_PATH,
+    "customer_ltv": CUSTOMER_LTV_PATH,
+    "regional_performance": REGIONAL_PERF_PATH
+}
+for name, path in gold_paths.items():
+    count = spark.read.format("delta").load(path).count()
+    print(f"{name}: {count} records")

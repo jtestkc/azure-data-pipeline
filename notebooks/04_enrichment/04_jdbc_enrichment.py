@@ -1,14 +1,26 @@
+# Databricks notebook source
 # Databricks Notebook: JDBC Enrichment - Azure SQL Database Join
 # Section 4: Batch Join & Enrichment
 # JDBC connection to Azure SQL Database with broadcast join
 
 from pyspark.sql.functions import broadcast, col, concat, lit
 from pyspark.sql import SparkSession
+import re
+
+def sanitize_secret(secret_value):
+    if not secret_value: return ""
+    return re.sub(r'[\s\x00-\x1F\x7F-\x9F]', '', secret_value)
 
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
-CATALOG_NAME = "sales_catalog"
+ADLS_ACCOUNT_NAME = sanitize_secret(dbutils.secrets.get("kv-secrets", "adls-account-name"))
+CONTAINER_NAME = "rawdata"
+ROOT_PATH = f"abfss://{CONTAINER_NAME}@{ADLS_ACCOUNT_NAME}.dfs.core.windows.net"
+
+SILVER_PATH = f"{ROOT_PATH}/silver/orders"
+ENRICHED_ORDERS_PATH = f"{ROOT_PATH}/enriched/orders"
+ENRICHMENT_METRICS_PATH = f"{ROOT_PATH}/enriched/enrichment_metrics"
 
 JDBC_URL = dbutils.secrets.get("kv-secrets", "sql-jdbc-url")
 JDBC_USER = dbutils.secrets.get("kv-secrets", "sql-username")
@@ -16,12 +28,10 @@ JDBC_PASSWORD = dbutils.secrets.get("kv-secrets", "sql-password")
 
 SQL_TABLE = "customers"
 
-spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOG_NAME}.enriched")
-
 # ============================================================================
 # READ FROM SILVER LAYER
 # ============================================================================
-silver_orders = spark.read.format("delta").table(f"{CATALOG_NAME}.silver.orders")
+silver_orders = spark.read.format("delta").load(SILVER_PATH)
 
 print(f"Orders in Silver layer: {silver_orders.count()}")
 silver_orders.printSchema()
@@ -90,7 +100,7 @@ enriched_orders = enriched_orders.fillna({
 enriched_orders.write.format("delta") \
     .mode("overwrite") \
     .option("overwriteSchema", "true") \
-    .saveAsTable(f"{CATALOG_NAME}.enriched.orders")
+    .save(ENRICHED_ORDERS_PATH)
 
 print("Enrichment completed")
 print(f"Total enriched records: {enriched_orders.count()}")
@@ -122,4 +132,4 @@ enrichment_metrics = spark.createDataFrame([
 
 enrichment_metrics.write.format("delta") \
     .mode("overwrite") \
-    .saveAsTable(f"{CATALOG_NAME}.enriched.enrichment_metrics")
+    .save(ENRICHMENT_METRICS_PATH)
