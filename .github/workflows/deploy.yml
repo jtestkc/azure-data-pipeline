@@ -95,8 +95,15 @@ jobs:
           github_pat            = ""
           EOF
 
+      - name: Setup Terraform Backend
+        run: |
+          chmod +x scripts/setup_backend.sh
+          ./scripts/setup_backend.sh
+        env:
+          ENVIRONMENT: ${{ github.event.inputs.environment }}
+
       - name: Terraform Init
-        run: cd terraform && terraform init -upgrade
+        run: cd terraform && terraform init -upgrade -backend-config=../backend_config/backend.hcl
         env:
           ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
           ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
@@ -172,8 +179,15 @@ jobs:
           github_pat            = ""
           EOF
 
+      - name: Setup Terraform Backend
+        run: |
+          chmod +x scripts/setup_backend.sh
+          ./scripts/setup_backend.sh
+        env:
+          ENVIRONMENT: ${{ github.event.inputs.environment }}
+
       - name: Terraform Init
-        run: cd terraform && terraform init -upgrade
+        run: cd terraform && terraform init -upgrade -backend-config=../backend_config/backend.hcl
 
       - name: Terraform Apply
         run: cd terraform && terraform apply -auto-approve -no-color 2>&1 | tee apply_output.txt
@@ -257,8 +271,15 @@ jobs:
           github_pat            = ""
           EOF
 
+      - name: Setup Terraform Backend
+        run: |
+          chmod +x scripts/setup_backend.sh
+          ./scripts/setup_backend.sh
+        env:
+          ENVIRONMENT: ${{ github.event.inputs.environment }}
+
       - name: Terraform Init
-        run: cd terraform && terraform init -upgrade 2>&1 || true
+        run: cd terraform && terraform init -upgrade -backend-config=../backend_config/backend.hcl 2>&1 || true
 
       - name: Terraform Destroy
         run: |
@@ -434,8 +455,15 @@ jobs:
           github_pat            = ""
           EOF
 
+      - name: Setup Terraform Backend
+        run: |
+          chmod +x scripts/setup_backend.sh
+          ./scripts/setup_backend.sh
+        env:
+          ENVIRONMENT: ${{ github.event.inputs.environment }}
+
       - name: Terraform Init
-        run: cd terraform && terraform init -upgrade
+        run: cd terraform && terraform init -upgrade -backend-config=../backend_config/backend.hcl
 
       - name: Terraform Destroy
         run: cd terraform && terraform destroy -auto-approve -no-color
