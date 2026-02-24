@@ -434,17 +434,6 @@ provider "databricks" {
   azure_tenant_id     = var.tenant_id
 }
 
-# Configure the Databricks workspace provider alias for resources that need explicit provider
-provider "databricks" {
-  alias = "workspace"
-  host  = azurerm_databricks_workspace.main.workspace_url
-
-  # Authenticate using the Service Principal
-  azure_client_id     = var.client_id
-  azure_client_secret = var.client_secret
-  azure_tenant_id     = var.tenant_id
-}
-
 # 1. Add the human user to the Databricks Workspace
 resource "databricks_user" "human_admin" {
   provider  = databricks.workspace
