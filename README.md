@@ -94,7 +94,7 @@ This project builds a state-of-the-art **sorting facility** that works automatic
 
 | Resource | Details |
 |----------|---------|
-| Workspace | `https://adb-7405617625659224.4.azuredatabricks.net` |
+| Workspace | `https://adb-XXXXXXXXXXXXXX.4.azuredatabricks.net` |
 | Cluster | `0224-183514-zbo8sv0g` |
 | Job ID | `230840096328427` |
 
@@ -195,7 +195,7 @@ az login --service-principal -u $ARM_CLIENT_ID -p $ARM_CLIENT_SECRET --tenant $A
 
 ### Method 1: Databricks UI
 
-1. Open: https://adb-7405617625659224.4.azuredatabricks.net
+1. Open: https://adb-XXXXXXXXXXXXXX.4.azuredatabricks.net
 2. Go to **Jobs** → **Real-Time-Sales-Analytics-Full-Pipeline**
 3. Click **Run Now**
 
@@ -205,7 +205,7 @@ az login --service-principal -u $ARM_CLIENT_ID -p $ARM_CLIENT_SECRET --tenant $A
 curl -X POST -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"job_id": 230840096328427}' \
-  "https://adb-7405617625659224.4.azuredatabricks.net/api/2.1/jobs/run-now"
+  "https://adb-XXXXXXXXXXXXXX.4.azuredatabricks.net/api/2.1/jobs/run-now"
 ```
 
 ### Method 3: GitHub Actions
@@ -220,7 +220,7 @@ Run workflow with `action: run-pipeline`
 
 **Location**: `/Shared/notebooks/sales_dashboard`
 
-**URL**: https://adb-7405617625659224.4.azuredatabricks.net/?o=7405617625659224#notebook/workspace/Shared/notebooks/sales_dashboard
+**URL**: https://adb-XXXXXXXXXXXXXX.4.azuredatabricks.net/?o=7405617625659224#notebook/workspace/Shared/notebooks/sales_dashboard
 
 **Metrics**:
 - 💰 Total Revenue
@@ -232,7 +232,7 @@ Run workflow with `action: run-pipeline`
 
 ### SQL Dashboard (Lakeview)
 
-**URL**: https://adb-7405617625659224.4.azuredatabricks.net/sql/dashboards?o=7405617625659224
+**URL**: https://adb-XXXXXXXXXXXXXX.4.azuredatabricks.net/sql/dashboards?o=7405617625659224
 
 ---
 
@@ -289,7 +289,7 @@ with producer:
 
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" \
-  "https://adb-7405617625659224.4.azuredatabricks.net/api/2.1/jobs/runs/list?active_only=true"
+  "https://adb-XXXXXXXXXXXXXX.4.azuredatabricks.net/api/2.1/jobs/runs/list?active_only=true"
 ```
 
 ---
