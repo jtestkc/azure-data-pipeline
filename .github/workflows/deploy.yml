@@ -278,6 +278,11 @@ jobs:
   # ==========================================================================
   # RUN PIPELINE - Trigger Databricks Job
   # ==========================================================================
+  # Note: To trigger Databricks jobs from GitHub Actions, you need to:
+  # 1. Create a Databricks PAT token in Databricks UI
+  # 2. Store it in GitHub Secrets as DATABRICKS_TOKEN
+  # 3. Use the databricks_token in the steps below
+  # For now, this job provides workspace info - run the job manually from Databricks UI
   run-pipeline:
     name: Run Databricks Pipeline
     runs-on: ubuntu-latest
@@ -305,37 +310,20 @@ jobs:
           WORKSPACE_RESOURCE_ID=$(az databricks workspace show -n "$WORKSPACE" -g "$RESOURCE_GROUP" --query id -o tsv)
           echo "workspace_resource_id=$WORKSPACE_RESOURCE_ID" >> $GITHUB_OUTPUT
 
-      - name: Get Databricks Job ID
-        id: job
+      - name: Get Databricks Job Info
         run: |
           WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
           
-          TOKEN=$(az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
-          
-          JOBS_JSON=$(curl -s -X GET "${WORKSPACE_URL}/api/2.1/jobs/list" \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "Content-Type: application/json")
-          
-          JOB_ID=$(echo $JOBS_JSON | grep -o '"job_id":[0-9]*' | head -1 | grep -o '[0-9]*')
-          echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
-
-      - name: Run Databricks Job
-        run: |
-          WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
-          JOB_ID=${{ steps.job.outputs.job_id }}
-          
-          TOKEN=$(az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
-          
-          echo "Starting Databricks Job: $JOB_ID"
-          curl -s -X POST "${WORKSPACE_URL}/api/2.1/jobs/run-now" \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "{\"job_id\": $JOB_ID}"
-
-      - name: Post Pipeline Summary
-        run: |
-          echo "## Pipeline Started! 🚀" >> $GITHUB_STEP_SUMMARY
-          echo "Databricks Job triggered successfully." >> $GITHUB_STEP_SUMMARY
+          echo "## Databricks Pipeline Info 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Workspace URL**: $WORKSPACE_URL" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "To run the pipeline:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Go to: $WORKSPACE_URL" >> $GITHUB_STEP_SUMMARY
+          echo "2. Navigate to Jobs > Real-Time-Sales-Analytics-Full-Pipeline" >> $GITHUB_STEP_SUMMARY
+          echo "3. Click Run Now" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Note**: To automate this from GitHub, add a Databricks PAT token to GitHub secrets and update this workflow." >> $GITHUB_STEP_SUMMARY
 
   # ==========================================================================
   # DESTROY - Clean up all resources (use with caution!)
