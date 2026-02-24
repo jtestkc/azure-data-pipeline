@@ -323,7 +323,7 @@ resource "databricks_repo" "analytics_pipeline" {
   count      = var.github_pat != "" ? 1 : 0
   url        = "https://github.com/jtestkc/azure-data-pipeline"
   path       = "/Repos/jtestkc/azure-data-pipeline"
-  depends_on = databricks_git_credential.personal_pat
+  depends_on = [databricks_git_credential.personal_pat]
 }
 
 resource "databricks_permissions" "repo_access" {
