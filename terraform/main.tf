@@ -459,3 +459,17 @@ resource "databricks_entitlements" "human_admin_privileges" {
   # This explicitly grants admin access on the workspace level
   # without needing to query the volatile "admins" group
 }
+
+# 3. Add Service Principal to Databricks for API access
+resource "databricks_service_principal" "terraform_sp" {
+  provider       = databricks.workspace
+  application_id = var.client_id
+  display_name   = "Terraform Service Principal"
+}
+
+resource "databricks_entitlements" "sp_privileges" {
+  provider             = databricks.workspace
+  service_principal_id = databricks_service_principal.terraform_sp.id
+  workspace_access     = true
+  allow_cluster_create = true
+}
