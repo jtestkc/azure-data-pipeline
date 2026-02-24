@@ -214,22 +214,18 @@ resource "azurerm_databricks_workspace" "main" {
 
 # ============================================================================
 # DATABRICKS CLUSTER — Single-node, auto-terminating
-# Cost optimization: 1 worker, terminate after 5 min idle
+# Cost optimization: 1 worker, terminate after 10 min idle
 # ============================================================================
 resource "databricks_cluster" "main" {
   cluster_name            = "${var.prefix}-analytics-cluster"
   spark_version           = var.spark_version
   node_type_id            = var.cluster_node_type
   autotermination_minutes = var.cluster_autotermination_minutes
-  num_workers             = 0 # MUST be 0 for SingleNode cluster, otherwise it hangs waiting for workers
+  num_workers             = 1
 
   spark_conf = {
     # Storage Access
     "fs.azure.account.key.${azurerm_storage_account.datalake.name}.dfs.core.windows.net" = azurerm_storage_account.datalake.primary_access_key
-
-    # Single Node mode
-    "spark.databricks.cluster.profile" = "singleNode"
-    "spark.master"                     = "local[*]"
 
     # Delta optimizations
     "spark.databricks.delta.optimizeWrite.enabled" = "true"
@@ -237,7 +233,7 @@ resource "databricks_cluster" "main" {
   }
 
   custom_tags = {
-    "ResourceClass" = "SingleNode"
+    "ResourceClass" = "Standard"
   }
 
   # Libraries - Using built-in Kafka connector (no need for azure-eventhubs-spark)
