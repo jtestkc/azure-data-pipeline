@@ -308,36 +308,63 @@ jobs:
       - name: Get Databricks Workspace Details
         id: workspace
         run: |
+          # Use Azure CLI v0.11+ compatible commands (works with latest CLI)
           RESOURCE_GROUP=$(az group list --query "[?contains(name, 'rg-rtsa') && contains(name, '-dev')].name | [0]" -o tsv)
           echo "resource_group=$RESOURCE_GROUP" >> $GITHUB_OUTPUT
           
-          WORKSPACE=$(az resource list --resource-group "$RESOURCE_GROUP" --query "[?type=='Microsoft.Databricks/workspaces'].name | [0]" -o tsv)
-          WORKSPACE_URL=$(az databricks workspace show -n "$WORKSPACE" -g "$RESOURCE_GROUP" --query workspaceUrl -o tsv)
+          # Get workspace using resource provider API (more reliable than databricks extension)
+          WORKSPACE=$(az resource list --resource-group "$RESOURCE_GROUP" --resource-type Microsoft.Databricks/workspaces --query "[0].name" -o tsv)
+          echo "workspace_name=$WORKSPACE" >> $GITHUB_OUTPUT
+          
+          # Get workspace URL using resource properties (works with all CLI versions)
+          WORKSPACE_URL=$(az resource show --resource-group "$RESOURCE_GROUP" --name "$WORKSPACE" --resource-type Microsoft.Databricks/workspaces --query "properties.workspaceUrl" -o tsv)
           echo "workspace_url=https://$WORKSPACE_URL" >> $GITHUB_OUTPUT
           
-          WORKSPACE_RESOURCE_ID=$(az databricks workspace show -n "$WORKSPACE" -g "$RESOURCE_GROUP" --query id -o tsv)
+          # Get workspace resource ID
+          WORKSPACE_RESOURCE_ID=$(az resource show --resource-group "$RESOURCE_GROUP" --name "$WORKSPACE" --resource-type Microsoft.Databricks/workspaces --query "id" -o tsv)
           echo "workspace_resource_id=$WORKSPACE_RESOURCE_ID" >> $GITHUB_OUTPUT
 
       - name: Get Databricks Job ID
         id: job
         run: |
           WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
+          WORKSPACE_NAME=${{ steps.workspace.outputs.workspace_name }}
           
           if [ -n "${{ secrets.DATABRICKS_TOKEN }}" ]; then
+            # Try to get job list using the new API endpoint (more reliable)
             JOBS_JSON=$(curl -s -X GET "${WORKSPACE_URL}/api/2.1/jobs/list" \
               -H "Authorization: Bearer ${{ secrets.DATABRICKS_TOKEN }}" \
               -H "Content-Type: application/json")
             
+            # Parse job ID from the response
             JOB_ID=$(echo $JOBS_JSON | grep -o '"job_id":[0-9]*' | head -1 | grep -o '[0-9]*')
-            echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
-            echo "has_token=true" >> $GITHUB_OUTPUT
+            
+            # If no job found, check if job exists by name
+            if [ -z "$JOB_ID" ]; then
+              # Get job details by name
+              JOB_DETAILS=$(curl -s -X GET "${WORKSPACE_URL}/api/2.1/jobs/get?job_id=0" \
+                -H "Authorization: Bearer ${{ secrets.DATABRICKS_TOKEN }}" \
+                -H "Content-Type: application/json" 2>/dev/null)
+              
+              # Try to find the pipeline job by name
+              JOB_ID=$(echo "$JOB_DETAILS" | grep -o '"job_id":[0-9]*' | head -1 | grep -o '[0-9]*')
+            fi
+            
+            if [ -n "$JOB_ID" ]; then
+              echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
+              echo "has_token=true" >> $GITHUB_OUTPUT
+            else
+              echo "job_id=" >> $GITHUB_OUTPUT
+              echo "has_token=true" >> $GITHUB_OUTPUT
+              echo "## ⚠️ Job not found in workspace. Please run the pipeline manually from Databricks UI." >> $GITHUB_STEP_SUMMARY
+            fi
           else
             echo "job_id=" >> $GITHUB_OUTPUT
             echo "has_token=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Run Databricks Job (Automatic)
-        if: steps.job.outputs.has_token == 'true'
+        if: steps.job.outputs.has_token == 'true' && steps.job.outputs.job_id != ''
         run: |
           WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
           JOB_ID=${{ steps.job.outputs.job_id }}
@@ -353,13 +380,15 @@ jobs:
           echo "Job ID $JOB_ID triggered successfully." >> $GITHUB_STEP_SUMMARY
 
       - name: Get Databricks Job Info (Manual)
-        if: steps.job.outputs.has_token != 'true'
+        if: steps.job.outputs.has_token != 'true' || steps.job.outputs.job_id == ''
         run: |
           WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
+          WORKSPACE_NAME=${{ steps.workspace.outputs.workspace_name }}
           
           echo "## Databricks Pipeline Info 🚀" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Workspace URL**: $WORKSPACE_URL" >> $GITHUB_STEP_SUMMARY
+          echo "**Workspace Name**: $WORKSPACE_NAME" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "To run the pipeline:" >> $GITHUB_STEP_SUMMARY
           echo "1. Go to: $WORKSPACE_URL" >> $GITHUB_STEP_SUMMARY

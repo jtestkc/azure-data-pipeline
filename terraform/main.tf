@@ -422,7 +422,17 @@ resource "databricks_job" "pipeline" {
 # ============================================================================
 # DATABRICKS WORKSPACE ACCESS (ADMIN)
 # ============================================================================
-# Configure the Databricks provider to authenticate against the new workspace
+# Configure the default Databricks provider (required for data sources)
+provider "databricks" {
+  host = azurerm_databricks_workspace.main.workspace_url
+
+  # Authenticate using the Service Principal
+  azure_client_id     = var.client_id
+  azure_client_secret = var.client_secret
+  azure_tenant_id     = var.tenant_id
+}
+
+# Configure the Databricks workspace provider alias for resources that need explicit provider
 provider "databricks" {
   alias = "workspace"
   host  = azurerm_databricks_workspace.main.workspace_url
@@ -457,11 +467,7 @@ resource "databricks_entitlements" "human_admin_privileges" {
 }
 
 # Note: Service Principal was already created in previous deployment
-# To create PAT token, we need to look up the existing SP
-data "databricks_service_principal" "existing_sp" {
-  application_id = var.client_id
-}
-
+# We create PAT token directly without needing to look up the SP first
 # 4. Create PAT token for Service Principal (for GitHub Actions)
 resource "databricks_token" "sp_token" {
   provider         = databricks.workspace
