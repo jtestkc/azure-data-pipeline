@@ -298,10 +298,11 @@ jobs:
           RESOURCE_GROUP=$(az group list --query "[?contains(name, 'rg-rtsa') && contains(name, '-dev')].name | [0]" -o tsv)
           echo "resource_group=$RESOURCE_GROUP" >> $GITHUB_OUTPUT
           
-          WORKSPACE_URL=$(az databricks workspace show -g "$RESOURCE_GROUP" --query workspaceUrl -o tsv)
+          WORKSPACE=$(az resource list --resource-group "$RESOURCE_GROUP" --query "[?type=='Microsoft.Databricks/workspaces'].name | [0]" -o tsv)
+          WORKSPACE_URL=$(az databricks workspace show -n "$WORKSPACE" -g "$RESOURCE_GROUP" --query workspaceUrl -o tsv)
           echo "workspace_url=https://$WORKSPACE_URL" >> $GITHUB_OUTPUT
           
-          WORKSPACE_RESOURCE_ID=$(az databricks workspace show -g "$RESOURCE_GROUP" --query id -o tsv)
+          WORKSPACE_RESOURCE_ID=$(az databricks workspace show -n "$WORKSPACE" -g "$RESOURCE_GROUP" --query id -o tsv)
           echo "workspace_resource_id=$WORKSPACE_RESOURCE_ID" >> $GITHUB_OUTPUT
 
       - name: Get Databricks Job ID
