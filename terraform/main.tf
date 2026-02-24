@@ -422,9 +422,11 @@ resource "databricks_job" "pipeline" {
 # ============================================================================
 # DATABRICKS WORKSPACE ACCESS (ADMIN)
 # ============================================================================
-# Configure the default Databricks provider (required for data sources)
+# Configure the Databricks workspace provider for resources that need workspace URL
+# Note: Default provider is configured in providers.tf
 provider "databricks" {
-  host = azurerm_databricks_workspace.main.workspace_url
+  alias = "workspace"
+  host  = azurerm_databricks_workspace.main.workspace_url
 
   # Authenticate using the Service Principal
   azure_client_id     = var.client_id
