@@ -3,23 +3,21 @@
 # Ingests real-time order events from Event Hubs into Delta Lake (Bronze)
 
 from pyspark.sql.functions import from_json, col, to_timestamp, current_timestamp, current_date
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType, DateType, TimestampType
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType, DateType, TimestampType, LongType
 import re
-
-# ============================================================================
-# CONFIGURATION - Get secrets from Key Vault
-# ============================================================================
-
-# Get Event Hubs connection string from Key Vault
-EVENTHUB_CONNECTION_STRING = dbutils.secrets.get("kv-secrets", "eventhub-connection-string")
-EVENTHUB_NAME = "orders"
-
 # Get Azure Storage credentials
 ADLS_ACCOUNT_NAME = dbutils.secrets.get("kv-secrets", "adls-account-name")
 ADLS_STORAGE_KEY = dbutils.secrets.get("kv-secrets", "adls-storage-key")
 
 # Configure Spark to access ADLS Gen2
 spark.conf.set(f"fs.azure.account.key.{ADLS_ACCOUNT_NAME}.dfs.core.windows.net", ADLS_STORAGE_KEY)
+
+# Enable schema evolution for Delta
+spark.conf.set("spark.databricks.delta.schema.autoMerge.enabled", "true")
+
+# Get Event Hubs connection string from Key Vault
+EVENTHUB_CONNECTION_STRING = dbutils.secrets.get("kv-secrets", "eventhub-connection-string")
+EVENTHUB_NAME = "orders"
 
 # ============================================================================
 # EXTRACT KAFKA CONFIGURATION FROM CONNECTION STRING
@@ -82,7 +80,7 @@ order_schema = StructType([
     StructField("customer_id", StringType(), False),
     StructField("product_id", StringType(), False),
     StructField("product_name", StringType(), True),
-    StructField("quantity", IntegerType(), False),
+    StructField("quantity", LongType(), False),
     StructField("unit_price", DoubleType(), False),
     StructField("total_price", DoubleType(), False),
     StructField("region", StringType(), True),
@@ -129,11 +127,17 @@ ROOT_PATH = f"abfss://{CONTAINER_NAME}@{ADLS_ACCOUNT_NAME}.dfs.core.windows.net"
 checkpoint_path = f"{ROOT_PATH}/_checkpoints/bronze_orders"
 output_path = f"{ROOT_PATH}/bronze/orders"
 
-# Widget to reset checkpoint if needed
+# Widgets to reset state if needed
 dbutils.widgets.text("reset_checkpoint", "false", "Reset Checkpoint (true/false)")
+dbutils.widgets.text("reset_data", "false", "Reset Data (true/false)")
+
 if dbutils.widgets.get("reset_checkpoint").lower() == "true":
     print(f"🗑️  RESETTING CHECKPOINT: {checkpoint_path}")
     dbutils.fs.rm(checkpoint_path, True)
+
+if dbutils.widgets.get("reset_data").lower() == "true":
+    print(f"🗑️  RESETTING DATA: {output_path}")
+    dbutils.fs.rm(output_path, True)
 
 # Start streaming query (optimized for batch completion)
 query = (
