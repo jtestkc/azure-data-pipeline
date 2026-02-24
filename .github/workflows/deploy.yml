@@ -330,14 +330,14 @@ jobs:
             
             JOB_ID=$(echo $JOBS_JSON | grep -o '"job_id":[0-9]*' | head -1 | grep -o '[0-9]*')
             echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
-            echo "Using DATABRICKS_TOKEN to authenticate"
+            echo "has_token=true" >> $GITHUB_OUTPUT
           else
             echo "job_id=" >> $GITHUB_OUTPUT
-            echo "No DATABRICKS_TOKEN found - will show manual instructions"
+            echo "has_token=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Run Databricks Job (Automatic)
-        if: secrets.DATABRICKS_TOKEN != ''
+        if: steps.job.outputs.has_token == 'true'
         run: |
           WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
           JOB_ID=${{ steps.job.outputs.job_id }}
@@ -353,7 +353,7 @@ jobs:
           echo "Job ID $JOB_ID triggered successfully." >> $GITHUB_STEP_SUMMARY
 
       - name: Get Databricks Job Info (Manual)
-        if: secrets.DATABRICKS_TOKEN == ''
+        if: steps.job.outputs.has_token != 'true'
         run: |
           WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
           
