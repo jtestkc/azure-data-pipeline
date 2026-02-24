@@ -88,7 +88,7 @@ variable "cluster_max_workers" {
 variable "cluster_autotermination_minutes" {
   description = "Minutes of inactivity before cluster auto-terminates (saves cost!)"
   type        = number
-  default     = 5 # ✅ Very aggressive - saves money when not in use
+  default     = 10 # Minimum 10 minutes required by Databricks
 }
 
 variable "spark_version" {

@@ -89,7 +89,7 @@ jobs:
           sql_admin_password = "${{ secrets.SQL_ADMIN_PASSWORD }}"
           eventhub_sku           = "Standard"
           cluster_max_workers    = 1
-          cluster_autotermination_minutes = 5
+          cluster_autotermination_minutes = 10
           spark_version          = "14.3.x-scala2.12"
           sql_database_sku       = "Free"
           github_pat            = ""
@@ -166,7 +166,7 @@ jobs:
           sql_admin_password = "${{ secrets.SQL_ADMIN_PASSWORD }}"
           eventhub_sku           = "Standard"
           cluster_max_workers    = 1
-          cluster_autotermination_minutes = 5
+          cluster_autotermination_minutes = 10
           spark_version          = "14.3.x-scala2.12"
           sql_database_sku       = "Free"
           github_pat            = ""
@@ -243,7 +243,7 @@ jobs:
           sql_admin_password = "${{ secrets.SQL_ADMIN_PASSWORD }}"
           eventhub_sku           = "Standard"
           cluster_max_workers    = 1
-          cluster_autotermination_minutes = 5
+          cluster_autotermination_minutes = 10
           spark_version          = "14.3.x-scala2.12"
           sql_database_sku       = "Free"
           github_pat            = ""
@@ -307,7 +307,7 @@ jobs:
           sql_admin_password = "${{ secrets.SQL_ADMIN_PASSWORD }}"
           eventhub_sku           = "Standard"
           cluster_max_workers    = 1
-          cluster_autotermination_minutes = 5
+          cluster_autotermination_minutes = 10
           spark_version          = "14.3.x-scala2.12"
           sql_database_sku       = "Free"
           github_pat            = ""
