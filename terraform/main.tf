@@ -223,10 +223,6 @@ resource "databricks_cluster" "main" {
   autotermination_minutes = var.cluster_autotermination_minutes
   num_workers             = 0 # MUST be 0 for SingleNode cluster, otherwise it hangs waiting for workers
 
-  # ✅ FIXED: Use NONE for service principal authentication
-  # SINGLE_USER requires a user email, not a service principal client_id
-  data_security_mode = "NONE"
-
   spark_conf = {
     # Storage Access
     "fs.azure.account.key.${azurerm_storage_account.datalake.name}.dfs.core.windows.net" = azurerm_storage_account.datalake.primary_access_key
@@ -460,11 +456,17 @@ resource "databricks_entitlements" "human_admin_privileges" {
   # without needing to query the volatile "admins" group
 }
 
-# 3. Add Service Principal to Databricks for API access
-resource "databricks_service_principal" "terraform_sp" {
-  provider       = databricks.workspace
+# Note: Service Principal was already created in previous deployment
+# To create PAT token, we need to look up the existing SP
+data "databricks_service_principal" "existing_sp" {
   application_id = var.client_id
-  display_name   = "Terraform Service Principal"
+}
+
+# 4. Create PAT token for Service Principal (for GitHub Actions)
+resource "databricks_token" "sp_token" {
+  provider         = databricks.workspace
+  comment          = "GitHub Actions Token"
+  lifetime_seconds = 2592000 # 30 days
 }
 
 resource "databricks_entitlements" "sp_privileges" {
