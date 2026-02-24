@@ -127,7 +127,7 @@ resource "azurerm_key_vault_secret" "storage_account_key" {
 
 resource "azurerm_key_vault_secret" "eventhub_connection_string" {
   name         = "eventhub-connection-string"
-  value        = azurerm_eventhub_authorization_rule.listen_send.primary_connection_string
+  value        = azurerm_eventhub_namespace_authorization_rule.databricks.primary_connection_string
   key_vault_id = azurerm_key_vault.main.id
   depends_on   = [time_sleep.wait_for_kv_policy]
 }
@@ -188,6 +188,15 @@ resource "azurerm_eventhub_authorization_rule" "listen_send" {
   manage              = false # Least privilege: no manage permission
 }
 
+resource "azurerm_eventhub_namespace_authorization_rule" "databricks" {
+  name                = "databricks-namespace-rule"
+  namespace_name      = azurerm_eventhub_namespace.main.name
+  resource_group_name = azurerm_resource_group.main.name
+  listen              = true
+  send                = true
+  manage              = false
+}
+
 
 
 # ============================================================================
@@ -222,6 +231,7 @@ resource "databricks_cluster" "main" {
   node_type_id            = var.cluster_node_type
   autotermination_minutes = var.cluster_autotermination_minutes
   num_workers             = 1
+  data_security_mode      = "SINGLE_USER"
 
   spark_conf = {
     # Storage Access

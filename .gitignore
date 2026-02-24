@@ -138,7 +138,11 @@ temp/
 
 # Terraform code (NOT variables with secrets!)
 *.tf
-!terraform.tfvars.example
+!terraform/terraform.tfvars.example
+!terraform/main.tf
+!terraform/variables.tf
+!terraform/providers.tf
+!terraform/outputs.tf
 
 # Provider lock file (OK to commit)
 .terraform.lock.hcl

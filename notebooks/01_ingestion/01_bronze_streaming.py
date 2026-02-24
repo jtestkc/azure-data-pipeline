@@ -33,16 +33,19 @@ if not namespace_match:
     raise ValueError("FATAL: Could not parse Event Hubs namespace from connection string")
 
 EVENTHUB_NAMESPACE = namespace_match.group(1)
-KAFKA_BOOTSTRAP_SERVERS = f"{EVENTHUB_NAMESPACE}.servicebus.windows.net:9093"
+
+# Correct the bootstrap server calculation (avoid double domain bug)
+if ".servicebus.windows.net" in EVENTHUB_NAMESPACE:
+    KAFKA_BOOTSTRAP_SERVERS = f"{EVENTHUB_NAMESPACE}:9093"
+else:
+    KAFKA_BOOTSTRAP_SERVERS = f"{EVENTHUB_NAMESPACE}.servicebus.windows.net:9093"
 
 # ============================================================================
 # ✅ CRITICAL: BUILD KAFKA-CONFIGURATION
-# The Event Hubs connection string must have EntityPath appended for Kafka protocol
+# Use the connection string as is (Namespace level)
+kafka_password = EVENTHUB_CONNECTION_STRING
+
 # JAAS config must use kafkashaded prefix (NOT the old azure-eventhubs-spark library)
-# ============================================================================
-
-kafka_password = f"{EVENTHUB_CONNECTION_STRING};EntityPath={EVENTHUB_NAME}"
-
 KAFKA_JAAS_CONFIG = (
     f"kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule "
     f"required username=\"$ConnectionString\" "
@@ -55,9 +58,9 @@ kafka_options = {
     "kafka.sasl.mechanism": "PLAIN",
     "kafka.security.protocol": "SASL_SSL",
     "kafka.sasl.jaas.config": KAFKA_JAAS_CONFIG,
-    "kafka.subscribe": EVENTHUB_NAME,
-    "kafka.startingOffsets": "earliest",
-    "kafka.maxOffsetsPerTrigger": "1000",
+    "subscribe": EVENTHUB_NAME,
+    "startingOffsets": "earliest",
+    "maxOffsetsPerTrigger": "1000",
     "kafka.request.timeout.ms": "60000",
     "kafka.session.timeout.ms": "30000"
 }
@@ -132,7 +135,7 @@ if dbutils.widgets.get("reset_checkpoint").lower() == "true":
     print(f"🗑️  RESETTING CHECKPOINT: {checkpoint_path}")
     dbutils.fs.rm(checkpoint_path, True)
 
-# Start streaming query
+# Start streaming query (optimized for batch completion)
 query = (
     bronze_df
     .writeStream
@@ -140,7 +143,7 @@ query = (
     .outputMode("append")
     .option("checkpointLocation", checkpoint_path)
     .option("path", output_path)
-    .trigger(processingTime="2 minutes")
+    .trigger(availableNow=True)
     .start()
 )
 
