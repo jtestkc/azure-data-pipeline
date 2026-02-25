@@ -12,15 +12,35 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
-      - name: Download PAT Token Artifact
-        uses: actions/download-artifact@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v1
         with:
-          name: databricks-pat-token
-          path: .
-        id: download
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Setup Terraform Backend
+        run: |
+          chmod +x scripts/setup_backend.sh
+          ./scripts/setup_backend.sh
+        env:
+          ENVIRONMENT: dev
+
+      - name: Terraform Init
+        run: cd terraform && terraform init -upgrade -backend-config=../backend_config/backend.hcl
+
+      - name: Get PAT Token from Terraform
+        run: |
+          cd terraform
+          PAT_TOKEN=$(terraform output -raw databricks_pat_token)
+          cd ..
+          echo "$PAT_TOKEN" > pat_token.txt
 
       - name: Upload to GitHub Secrets
-        if: steps.download.outputs.artifacts_found == 'true'
         run: |
           TOKEN=$(cat pat_token.txt)
           echo "$TOKEN" | gh secret set DATABRICKS_TOKEN --repo ${{ github.repository }}
