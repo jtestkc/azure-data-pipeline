@@ -47,8 +47,8 @@ jobs:
         with:
           creds: '{"clientId": "${{ secrets.ARM_CLIENT_ID }}", "clientSecret": "${{ secrets.ARM_CLIENT_SECRET }}", "subscriptionId": "${{ secrets.ARM_SUBSCRIPTION_ID }}", "tenantId": "${{ secrets.ARM_TENANT_ID }}"}'
 
-      - name: Get PAT Token Terraform
-        id from: pat
+      - name: Get PAT Token from Terraform
+        id: pat
         run: |
           cd terraform
           PAT_TOKEN=$(terraform output -raw databricks_pat_token)
