@@ -309,6 +309,21 @@ jobs:
         with:
           creds: '{"clientId": "${{ secrets.ARM_CLIENT_ID }}", "clientSecret": "${{ secrets.ARM_CLIENT_SECRET }}", "subscriptionId": "${{ secrets.ARM_SUBSCRIPTION_ID }}", "tenantId": "${{ secrets.ARM_TENANT_ID }}"}'
 
+      - name: Get Key Vault Name
+        id: kv
+        run: |
+          KEYVAULT_NAME=$(az key vault list --resource-group "rg-rtsa-dev" --query "[0].name" -o tsv)
+          echo "keyvault_name=$KEYVAULT_NAME" >> $GITHUB_OUTPUT
+
+      - name: Get Databricks PAT Token from Key Vault
+        id: pat
+        uses: Azure/get-keyvault-secrets@v1
+        with:
+          keyvault: ${{ steps.kv.outputs.keyvault_name }}
+          secrets: 'databricks-pat-token'
+        outputs:
+          token: 'databricks-pat-token'
+
       - name: Get Databricks Workspace Details
         id: workspace
         run: |
@@ -322,14 +337,15 @@ jobs:
         timeout-minutes: 2
         run: |
           WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
-          if [ -n "${{ secrets.DATABRICKS_TOKEN }}" ]; then
+          DATABRICKS_TOKEN="${{ steps.pat.outputs.token }}"
+          if [ -n "$DATABRICKS_TOKEN" ]; then
             JOBS_JSON=$(curl -s -X GET "${WORKSPACE_URL}/api/2.1/jobs/list" \
-              -H "Authorization: Bearer ${{ secrets.DATABRICKS_TOKEN }}" \
+              -H "Authorization: Bearer $DATABRICKS_TOKEN" \
               -H "Content-Type: application/json")
             JOB_ID=$(echo "$JOBS_JSON" | grep -o '"job_id":[0-9]*' | head -1 | grep -o '[0-9]*' || echo "")
             if [ -z "$JOB_ID" ]; then
               JOB_DETAILS=$(curl -s -X GET "${WORKSPACE_URL}/api/2.1/jobs/get-by-name?job_name=Real-Time-Sales-Analytics-Full-Pipeline" \
-                -H "Authorization: Bearer ${{ secrets.DATABRICKS_TOKEN }}" \
+                -H "Authorization: Bearer $DATABRICKS_TOKEN" \
                 -H "Content-Type: application/json" 2>/dev/null || echo "{}")
               JOB_ID=$(echo "$JOB_DETAILS" | grep -o '"job_id":[0-9]*' | grep -o '[0-9]*' || echo "")
             fi
@@ -344,8 +360,9 @@ jobs:
         run: |
           WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
           JOB_ID=${{ steps.job.outputs.job_id }}
+          DATABRICKS_TOKEN="${{ steps.pat.outputs.token }}"
           curl -s -X POST "${WORKSPACE_URL}/api/2.1/jobs/run-now" \
-            -H "Authorization: Bearer ${{ secrets.DATABRICKS_TOKEN }}" \
+            -H "Authorization: Bearer $DATABRICKS_TOKEN" \
             -H "Content-Type: application/json" \
             -d "{\"job_id\": $JOB_ID}"
           echo "## Pipeline Started! 🚀" >> $GITHUB_STEP_SUMMARY
@@ -436,6 +453,21 @@ jobs:
         with:
           creds: '{"clientId": "${{ secrets.ARM_CLIENT_ID }}", "clientSecret": "${{ secrets.ARM_CLIENT_SECRET }}", "subscriptionId": "${{ secrets.ARM_SUBSCRIPTION_ID }}", "tenantId": "${{ secrets.ARM_TENANT_ID }}"}'
 
+      - name: Get Key Vault Name
+        id: kv
+        run: |
+          KEYVAULT_NAME=$(az key vault list --resource-group "rg-rtsa-dev" --query "[0].name" -o tsv)
+          echo "keyvault_name=$KEYVAULT_NAME" >> $GITHUB_OUTPUT
+
+      - name: Get Databricks PAT Token from Key Vault
+        id: pat
+        uses: Azure/get-keyvault-secrets@v1
+        with:
+          keyvault: ${{ steps.kv.outputs.keyvault_name }}
+          secrets: 'databricks-pat-token'
+        outputs:
+          token: 'databricks-pat-token'
+
       - name: Get Databricks Workspace Details
         id: workspace
         run: |
@@ -461,11 +493,12 @@ jobs:
         run: |
           WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
           WORKSPACE_NAME=${{ steps.workspace.outputs.workspace_name }}
+          DATABRICKS_TOKEN="${{ steps.pat.outputs.token }}"
           
-          if [ -n "${{ secrets.DATABRICKS_TOKEN }}" ]; then
+          if [ -n "$DATABRICKS_TOKEN" ]; then
             # Get job list using the API
             JOBS_JSON=$(curl -s -X GET "${WORKSPACE_URL}/api/2.1/jobs/list" \
-              -H "Authorization: Bearer ${{ secrets.DATABRICKS_TOKEN }}" \
+              -H "Authorization: Bearer $DATABRICKS_TOKEN" \
               -H "Content-Type: application/json")
             
             # Parse job ID from the response (safely)
@@ -474,7 +507,7 @@ jobs:
             # If no job found by listing, try to get by job name
             if [ -z "$JOB_ID" ]; then
               JOB_DETAILS=$(curl -s -X GET "${WORKSPACE_URL}/api/2.1/jobs/get-by-name?job_name=Real-Time-Sales-Analytics-Full-Pipeline" \
-                -H "Authorization: Bearer ${{ secrets.DATABRICKS_TOKEN }}" \
+                -H "Authorization: Bearer $DATABRICKS_TOKEN" \
                 -H "Content-Type: application/json" 2>/dev/null || echo "{}")
               
               JOB_ID=$(echo "$JOB_DETAILS" | grep -o '"job_id":[0-9]*' | grep -o '[0-9]*' || echo "")
@@ -492,7 +525,7 @@ jobs:
           else
             echo "job_id=" >> $GITHUB_OUTPUT
             echo "has_token=false" >> $GITHUB_OUTPUT
-            echo "No DATABRICKS_TOKEN found in secrets"
+            echo "No DATABRICKS_TOKEN found in Key Vault"
           fi
 
       - name: Run Databricks Job (Automatic)
@@ -500,11 +533,11 @@ jobs:
         run: |
           WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
           JOB_ID=${{ steps.job.outputs.job_id }}
-          TOKEN=${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_TOKEN="${{ steps.pat.outputs.token }}"
           
           echo "Starting Databricks Job: $JOB_ID"
           curl -s -X POST "${WORKSPACE_URL}/api/2.1/jobs/run-now" \
-            -H "Authorization: Bearer $TOKEN" \
+            -H "Authorization: Bearer $DATABRICKS_TOKEN" \
             -H "Content-Type: application/json" \
             -d "{\"job_id\": $JOB_ID}"
           

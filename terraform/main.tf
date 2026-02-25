@@ -631,13 +631,24 @@ resource "databricks_token" "sp_token" {
   lifetime_seconds = 2592000 # 30 days
 }
 
+# Store PAT token in Azure Key Vault for GitHub Actions to retrieve
+resource "azurerm_key_vault_secret" "databricks_pat" {
+  name         = "databricks-pat-token"
+  value        = databricks_token.sp_token.token_value
+  key_vault_id = module.storage.key_vault_id
+
+  depends_on = [databricks_token.sp_token]
+}
+
 # ============================================================================
 # ZERO-TOUCH CI/CD AUTOCONFIGURATION
 # ============================================================================
-# Automatically inject the Databricks token into the GitHub repository secrets so
-# subsequent GitHub Actions can authenticate with Databricks without human intervention.
-resource "github_actions_secret" "databricks_token" {
-  repository      = "azure-data-pipeline"
-  secret_name     = "DATABRICKS_TOKEN"
-  plaintext_value = databricks_token.sp_token.token_value
-}
+# PAT token is now stored in Azure Key Vault (databricks-pat-token secret)
+# GitHub Actions workflow will retrieve it from Key Vault after deployment
+
+# Commented out - using Key Vault approach instead
+# resource "github_actions_secret" "databricks_token" {
+#   repository      = "azure-data-pipeline"
+#   secret_name     = "DATABRICKS_TOKEN"
+#   plaintext_value = databricks_token.sp_token.token_value
+# }

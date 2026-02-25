@@ -102,6 +102,11 @@ output "databricks_pat_token" {
   sensitive   = true
 }
 
+output "key_vault_secret_name" {
+  description = "Key Vault secret name where DATABRICKS PAT is stored"
+  value       = "databricks-pat-token"
+}
+
 output "sql_server_fqdn" {
   description = "Fully qualified domain name of the Azure SQL Server"
   value       = azurerm_mssql_server.sql_main.fully_qualified_domain_name
