@@ -18,6 +18,8 @@ env:
   ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
   ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
   TF_VERSION: "1.6.0"
+  PREFIX: "rtsa"
+  LOCATION: "eastus"
 
 jobs:
   run-pipeline:
