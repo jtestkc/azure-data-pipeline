@@ -115,15 +115,16 @@ jobs:
         if: github.event.inputs.action == 'deploy'
         id: workspace
         run: |
-          WORKSPACE=$(az resource list --resource-type Microsoft.Databricks/workspaces --query "[0].name" -o tsv)
-          WORKSPACE_URL=$(az resource list --resource-type Microsoft.Databricks/workspaces --query "[0].properties.workspaceUrl" -o tsv)
-          echo "workspace_url=https://$WORKSPACE_URL" >> $GITHUB_OUTPUT
+          # Get workspace from the dev resource group
+          WORKSPACE=$(az resource list -g rg-rtsa-dev --resource-type Microsoft.Databricks/workspaces --query "[0].name" -o tsv)
+          WORKSPACE_URL=$(az resource list -g rg-rtsa-dev --resource-type Microsoft.Databricks/workspaces --query "[0].properties.workspaceUrl" -o tsv)
           echo "workspace_url_only=$WORKSPACE_URL" >> $GITHUB_OUTPUT
-          echo "Workspace: $WORKSPACE"
+          echo "Workspace: $WORKSPACE, URL: $WORKSPACE_URL"
 
       - name: Get Job ID
         if: github.event.inputs.action == 'deploy'
         id: job
+        continue-on-error: true
         run: |
           WORKSPACE_URL="https://${{ steps.workspace.outputs.workspace_url_only }}"
           DATABRICKS_TOKEN="${{ steps.pat.outputs.pat_token }}"
