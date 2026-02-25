@@ -1,0 +1,19 @@
+name: Upload PAT Token to GitHub Secrets
+
+on:
+  workflow_dispatch:
+    inputs:
+      pat_token:
+        description: 'PAT Token (from terraform output -raw databricks_pat_token)'
+        required: true
+        type: string
+
+jobs:
+  upload:
+    name: Upload DATABRICKS_TOKEN
+    runs-on: ubuntu-latest
+    steps:
+      - name: Upload to GitHub Secrets
+        run: |
+          echo "${{ github.event.inputs.pat_token }}" | gh secret set DATABRICKS_TOKEN --repo ${{ github.repository }}
+          echo "✅ DATABRICKS_TOKEN uploaded successfully!"
