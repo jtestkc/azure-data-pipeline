@@ -1,22 +1,8 @@
 name: Deploy Azure Databricks Pipeline
 
-# =============================================================================
-# SINGLE-CLICK DEPLOYMENT WORKFLOW
-# Options: Deploy, Destroy, Run Pipeline, Full Cycle
-# =============================================================================
-
 on:
   workflow_dispatch:
     inputs:
-      environment:
-        description: 'Environment name'
-        required: true
-        default: 'dev'
-        type: choice
-        options:
-          - dev
-          - staging
-          - prod
       action:
         description: 'Select Action'
         required: true
@@ -25,27 +11,6 @@ on:
         options:
           - deploy
           - destroy
-          - run-pipeline
-          - full-cycle
-      databricks_sku:
-        description: 'Databricks SKU (trial=14 days free)'
-        required: true
-        default: 'trial'
-        type: choice
-        options:
-          - trial
-          - standard
-          - premium
-
-# =============================================================================
-# SECRETS TO CONFIGURE IN GITHUB (Settings > Secrets > Actions):
-# =============================================================================
-# ARM_SUBSCRIPTION_ID   - Your Azure Subscription ID
-# ARM_TENANT_ID         - Azure AD Tenant ID  
-# ARM_CLIENT_ID         - Service Principal App ID
-# ARM_CLIENT_SECRET     - Service Principal Secret
-# SQL_ADMIN_PASSWORD    - SQL Server admin password
-# =============================================================================
 
 env:
   ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
@@ -57,99 +22,9 @@ env:
   LOCATION: "eastus"
 
 jobs:
-  # ==========================================================================
-  # PLAN - Show what will be created/modified
-  # ==========================================================================
-  plan:
-    name: Terraform Plan
-    runs-on: ubuntu-latest
-    if: github.event.inputs.action != 'destroy'
-    outputs:
-      plan_exit_code: ${{ steps.plan.outcome }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Create terraform.tfvars
-        run: |
-          cat > terraform/terraform.tfvars << 'EOF'
-          subscription_id = "${{ secrets.ARM_SUBSCRIPTION_ID }}"
-          tenant_id       = "${{ secrets.ARM_TENANT_ID }}"
-          client_id       = "${{ secrets.ARM_CLIENT_ID }}"
-          client_secret   = "${{ secrets.ARM_CLIENT_SECRET }}"
-          prefix          = "${{ env.PREFIX }}"
-          location        = "${{ env.LOCATION }}"
-          environment     = "${{ github.event.inputs.environment }}"
-          databricks_sku  = "${{ github.event.inputs.databricks_sku }}"
-          sql_admin_password = "${{ secrets.SQL_ADMIN_PASSWORD }}"
-          eventhub_sku           = "Standard"
-          cluster_max_workers    = 1
-          cluster_autotermination_minutes = 10
-          spark_version          = "14.3.x-scala2.12"
-          sql_database_sku       = "Free"
-          github_pat            = "${{ secrets.GH_PAT }}"
-          EOF
-
-      - name: Setup Terraform Backend
-        run: |
-          chmod +x scripts/setup_backend.sh
-          ./scripts/setup_backend.sh
-        env:
-          ENVIRONMENT: ${{ github.event.inputs.environment }}
-
-      - name: Terraform Init
-        run: cd terraform && terraform init -upgrade -backend-config=../backend_config/backend.hcl
-        env:
-          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-
-      - name: Terraform Plan
-        id: plan
-        run: cd terraform && terraform plan -out=tfplan -no-color 2>&1 | tee plan_output.txt
-        env:
-          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-
-      - name: Save Plan Output
-        if: always()
-        run: |
-          echo "## Terraform Plan Output" >> $GITHUB_STEP_SUMMARY
-          if [ -f plan_output.txt ]; then
-            cat plan_output.txt >> $GITHUB_STEP_SUMMARY
-          fi
-
-      - name: Upload Plan Output
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: plan-output
-          path: plan_output.txt
-          retention-days: 7
-
-      - name: Post Plan Summary
-        if: steps.plan.outcome == 'success'
-        run: |
-          echo "## Terraform Plan Summary" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Plan created successfully" >> $GITHUB_STEP_SUMMARY
-
-  # ==========================================================================
-  # DEPLOY - Apply the Terraform changes
-  # ==========================================================================
   deploy:
-    name: Terraform Apply
+    name: Terraform Deploy/Destroy
     runs-on: ubuntu-latest
-    needs: plan
-    if: github.event.inputs.action == 'deploy'
-    environment: ${{ github.event.inputs.environment }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -168,8 +43,8 @@ jobs:
           client_secret   = "${{ secrets.ARM_CLIENT_SECRET }}"
           prefix          = "${{ env.PREFIX }}"
           location        = "${{ env.LOCATION }}"
-          environment     = "${{ github.event.inputs.environment }}"
-          databricks_sku  = "${{ github.event.inputs.databricks_sku }}"
+          environment     = "dev"
+          databricks_sku  = "trial"
           sql_admin_password = "${{ secrets.SQL_ADMIN_PASSWORD }}"
           eventhub_sku           = "Standard"
           cluster_max_workers    = 1
@@ -184,431 +59,27 @@ jobs:
           chmod +x scripts/setup_backend.sh
           ./scripts/setup_backend.sh
         env:
-          ENVIRONMENT: ${{ github.event.inputs.environment }}
+          ENVIRONMENT: dev
 
       - name: Terraform Init
         run: cd terraform && terraform init -upgrade -backend-config=../backend_config/backend.hcl
+        env:
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
 
       - name: Terraform Apply
-        run: cd terraform && terraform apply -auto-approve -no-color 2>&1 | tee apply_output.txt
+        if: github.event.inputs.action == 'deploy'
+        run: cd terraform && terraform apply -auto-approve -no-color
         env:
           ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
           ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
           ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
           ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-
-      - name: Save Apply Output
-        if: always()
-        run: |
-          echo "## Terraform Apply Output" >> $GITHUB_STEP_SUMMARY
-          if [ -f apply_output.txt ]; then
-            cat apply_output.txt >> $GITHUB_STEP_SUMMARY
-          fi
-
-      - name: Upload Apply Output
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: apply-output
-          path: apply_output.txt
-          retention-days: 7
-
-      - name: Get Databricks PAT Token
-        id: get_pat_token
-        run: |
-          cd terraform
-          PAT_TOKEN=$(terraform output -raw databricks_pat_token)
-          cd ..
-          # Save to output for use in subsequent jobs
-          echo "pat_token_length=${#PAT_TOKEN}" >> $GITHUB_OUTPUT
-          # Save to file for artifact (in root directory)
-          echo "$PAT_TOKEN" > pat_token.txt
-          echo "PAT token retrieved successfully"
-
-      - name: Upload PAT Token
-        uses: actions/upload-artifact@v4
-        with:
-          name: databricks-pat-token
-          path: pat_token.txt
-          retention-days: 1
-
-      - name: Post Apply Summary
-        run: |
-          echo "## Deployment Complete! 🎉" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Resources Created:" >> $GITHUB_STEP_SUMMARY
-          echo "- Azure Resource Group" >> $GITHUB_STEP_SUMMARY
-          echo "- ADLS Gen2 Storage Account" >> $GITHUB_STEP_SUMMARY
-          echo "- Azure Key Vault" >> $GITHUB_STEP_SUMMARY
-          echo "- Event Hubs Namespace" >> $GITHUB_STEP_SUMMARY
-          echo "- Azure SQL Database" >> $GITHUB_STEP_SUMMARY
-          echo "- Databricks Workspace" >> $GITHUB_STEP_SUMMARY
-          echo "- Log Analytics Workspace" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Next Steps:" >> $GITHUB_STEP_SUMMARY
-          echo "1. Download the PAT token from workflow artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "2. Add it to GitHub Secrets as DATABRICKS_TOKEN" >> $GITHUB_STEP_SUMMARY
-          echo "3. Run workflow with 'run-pipeline' to trigger Databricks pipeline" >> $GITHUB_STEP_SUMMARY
-
-  # ==========================================================================
-  # FULL-CYCLE - Deploy + Run Pipeline
-  # ==========================================================================
-  full-cycle:
-    name: Deploy + Run Pipeline
-    runs-on: ubuntu-latest
-    if: github.event.inputs.action == 'full-cycle'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Create terraform.tfvars
-        run: |
-          cat > terraform/terraform.tfvars << 'EOF'
-          subscription_id = "${{ secrets.ARM_SUBSCRIPTION_ID }}"
-          tenant_id       = "${{ secrets.ARM_TENANT_ID }}"
-          client_id       = "${{ secrets.ARM_CLIENT_ID }}"
-          client_secret   = "${{ secrets.ARM_CLIENT_SECRET }}"
-          prefix          = "${{ env.PREFIX }}"
-          location        = "${{ env.LOCATION }}"
-          environment     = "${{ github.event.inputs.environment }}"
-          databricks_sku  = "${{ github.event.inputs.databricks_sku }}"
-          sql_admin_password = "${{ secrets.SQL_ADMIN_PASSWORD }}"
-          eventhub_sku           = "Standard"
-          cluster_max_workers    = 1
-          cluster_autotermination_minutes = 10
-          spark_version          = "14.3.x-scala2.12"
-          sql_database_sku       = "Free"
-          github_pat            = "${{ secrets.GH_PAT }}"
-          EOF
-
-      - name: Setup Terraform Backend
-        run: |
-          chmod +x scripts/setup_backend.sh
-          ./scripts/setup_backend.sh
-        env:
-          ENVIRONMENT: ${{ github.event.inputs.environment }}
-
-      - name: Terraform Init
-        run: cd terraform && terraform init -upgrade -backend-config=../backend_config/backend.hcl
-
-      - name: Terraform Apply
-        run: cd terraform && terraform apply -auto-approve -no-color 2>&1 | tee apply_output.txt
-        env:
-          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-
-      - name: Azure Login
-        uses: azure/login@v1
-        with:
-          creds: '{"clientId": "${{ secrets.ARM_CLIENT_ID }}", "clientSecret": "${{ secrets.ARM_CLIENT_SECRET }}", "subscriptionId": "${{ secrets.ARM_SUBSCRIPTION_ID }}", "tenantId": "${{ secrets.ARM_TENANT_ID }}"}'
-
-      - name: Get Databricks PAT Token from Terraform
-        id: pat
-        run: |
-          cd terraform
-          PAT_TOKEN=$(terraform output -raw databricks_pat_token)
-          echo "pat_token=$PAT_TOKEN" >> $GITHUB_OUTPUT
-
-      - name: Get Databricks Workspace Details
-        id: workspace
-        run: |
-          RESOURCE_GROUP=$(az group list --query "[?contains(name, 'rg-rtsa') && contains(name, '-dev')].name | [0]" -o tsv)
-          WORKSPACE=$(az resource list --resource-group "$RESOURCE_GROUP" --resource-type Microsoft.Databricks/workspaces --query "[0].name" -o tsv)
-          WORKSPACE_URL=$(az resource show --resource-group "$RESOURCE_GROUP" --name "$WORKSPACE" --resource-type Microsoft.Databricks/workspaces --query "properties.workspaceUrl" -o tsv)
-          echo "workspace_url=https://$WORKSPACE_URL" >> $GITHUB_OUTPUT
-
-      - name: Get Databricks Job ID
-        id: job
-        timeout-minutes: 2
-        run: |
-          WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
-          DATABRICKS_TOKEN="${{ steps.pat.outputs.pat_token }}"
-          if [ -n "$DATABRICKS_TOKEN" ]; then
-            JOBS_JSON=$(curl -s -X GET "${WORKSPACE_URL}/api/2.1/jobs/list" \
-              -H "Authorization: Bearer $DATABRICKS_TOKEN" \
-              -H "Content-Type: application/json")
-            JOB_ID=$(echo "$JOBS_JSON" | grep -o '"job_id":[0-9]*' | head -1 | grep -o '[0-9]*' || echo "")
-            if [ -z "$JOB_ID" ]; then
-              JOB_DETAILS=$(curl -s -X GET "${WORKSPACE_URL}/api/2.1/jobs/get-by-name?job_name=Real-Time-Sales-Analytics-Full-Pipeline" \
-                -H "Authorization: Bearer $DATABRICKS_TOKEN" \
-                -H "Content-Type: application/json" 2>/dev/null || echo "{}")
-              JOB_ID=$(echo "$JOB_DETAILS" | grep -o '"job_id":[0-9]*' | grep -o '[0-9]*' || echo "")
-            fi
-            if [ -n "$JOB_ID" ]; then
-              echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
-              echo "Found job ID: $JOB_ID"
-            fi
-          fi
-
-      - name: Run Databricks Job
-        if: steps.job.outputs.job_id != ''
-        run: |
-          WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
-          JOB_ID=${{ steps.job.outputs.job_id }}
-          DATABRICKS_TOKEN="${{ steps.pat.outputs.pat_token }}"
-          curl -s -X POST "${WORKSPACE_URL}/api/2.1/jobs/run-now" \
-            -H "Authorization: Bearer $DATABRICKS_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "{\"job_id\": $JOB_ID}"
-          echo "## Pipeline Started! 🚀" >> $GITHUB_STEP_SUMMARY
-
-  # ==========================================================================
-  # CLEANUP - Run on failure to destroy resources
-  # ==========================================================================
-  cleanup:
-    name: Cleanup on Failure
-    runs-on: ubuntu-latest
-    needs: [deploy, full-cycle]
-    if: failure() && (github.event.inputs.action == 'deploy' || github.event.inputs.action == 'full-cycle')
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Create terraform.tfvars
-        run: |
-          cat > terraform/terraform.tfvars << 'EOF'
-          subscription_id = "${{ secrets.ARM_SUBSCRIPTION_ID }}"
-          tenant_id       = "${{ secrets.ARM_TENANT_ID }}"
-          client_id       = "${{ secrets.ARM_CLIENT_ID }}"
-          client_secret   = "${{ secrets.ARM_CLIENT_SECRET }}"
-          prefix          = "${{ env.PREFIX }}"
-          location        = "${{ env.LOCATION }}"
-          environment     = "${{ github.event.inputs.environment }}"
-          databricks_sku  = "${{ github.event.inputs.databricks_sku }}"
-          sql_admin_password = "${{ secrets.SQL_ADMIN_PASSWORD }}"
-          eventhub_sku           = "Standard"
-          cluster_max_workers    = 1
-          cluster_autotermination_minutes = 10
-          spark_version          = "14.3.x-scala2.12"
-          sql_database_sku       = "Free"
-          github_pat            = ""
-          EOF
-
-      - name: Setup Terraform Backend
-        run: |
-          chmod +x scripts/setup_backend.sh
-          ./scripts/setup_backend.sh
-        env:
-          ENVIRONMENT: ${{ github.event.inputs.environment }}
-
-      - name: Terraform Init
-        run: cd terraform && terraform init -upgrade -backend-config=../backend_config/backend.hcl 2>&1 || true
 
       - name: Terraform Destroy
-        run: |
-          echo "## ⚠️ Deployment Failed - Cleaning Up Resources" >> $GITHUB_STEP_SUMMARY
-          cd terraform && terraform destroy -auto-approve -no-color 2>&1 | tee destroy_output.txt
-        env:
-          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-
-      - name: Upload Destroy Output
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: destroy-output
-          path: destroy_output.txt
-          retention-days: 7
-
-      - name: Post Cleanup Summary
-        run: |
-          echo "## Cleanup Complete" >> $GITHUB_STEP_SUMMARY
-          echo "All resources created during failed deployment have been destroyed." >> $GITHUB_STEP_SUMMARY
-
-  # ==========================================================================
-  # RUN PIPELINE - Trigger Databricks Job only (no terraform)
-  # ==========================================================================
-  run-pipeline:
-    name: Run Databricks Pipeline
-    runs-on: ubuntu-latest
-    if: github.event.inputs.action == 'run-pipeline'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Setup Terraform Backend
-        run: |
-          chmod +x scripts/setup_backend.sh
-          ./scripts/setup_backend.sh
-        env:
-          ENVIRONMENT: ${{ github.event.inputs.environment }}
-
-      - name: Terraform Init
-        run: cd terraform && terraform init -upgrade -backend-config=../backend_config/backend.hcl
-
-      - name: Get Databricks PAT Token from Terraform
-        id: pat
-        run: |
-          cd terraform
-          PAT_TOKEN=$(terraform output -raw databricks_pat_token)
-          echo "pat_token=$PAT_TOKEN" >> $GITHUB_OUTPUT
-
-      - name: Azure Login
-        uses: azure/login@v1
-        with:
-          creds: '{"clientId": "${{ secrets.ARM_CLIENT_ID }}", "clientSecret": "${{ secrets.ARM_CLIENT_SECRET }}", "subscriptionId": "${{ secrets.ARM_SUBSCRIPTION_ID }}", "tenantId": "${{ secrets.ARM_TENANT_ID }}"}'
-
-      - name: Get Databricks Workspace Details
-        id: workspace
-        run: |
-          # Use Azure CLI v0.11+ compatible commands (works with latest CLI)
-          RESOURCE_GROUP=$(az group list --query "[?contains(name, 'rg-rtsa') && contains(name, '-dev')].name | [0]" -o tsv)
-          echo "resource_group=$RESOURCE_GROUP" >> $GITHUB_OUTPUT
-          
-          # Get workspace using resource provider API (more reliable than databricks extension)
-          WORKSPACE=$(az resource list --resource-group "$RESOURCE_GROUP" --resource-type Microsoft.Databricks/workspaces --query "[0].name" -o tsv)
-          echo "workspace_name=$WORKSPACE" >> $GITHUB_OUTPUT
-          
-          # Get workspace URL using resource properties (works with all CLI versions)
-          WORKSPACE_URL=$(az resource show --resource-group "$RESOURCE_GROUP" --name "$WORKSPACE" --resource-type Microsoft.Databricks/workspaces --query "properties.workspaceUrl" -o tsv)
-          echo "workspace_url=https://$WORKSPACE_URL" >> $GITHUB_OUTPUT
-          
-          # Get workspace resource ID
-          WORKSPACE_RESOURCE_ID=$(az resource show --resource-group "$RESOURCE_GROUP" --name "$WORKSPACE" --resource-type Microsoft.Databricks/workspaces --query "id" -o tsv)
-          echo "workspace_resource_id=$WORKSPACE_RESOURCE_ID" >> $GITHUB_OUTPUT
-
-      - name: Get Databricks Job ID
-        id: job
-        timeout-minutes: 2
-        run: |
-          WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
-          WORKSPACE_NAME=${{ steps.workspace.outputs.workspace_name }}
-          DATABRICKS_TOKEN="${{ steps.pat.outputs.pat_token }}"
-          
-          if [ -n "$DATABRICKS_TOKEN" ]; then
-            # Get job list using the API
-            JOBS_JSON=$(curl -s -X GET "${WORKSPACE_URL}/api/2.1/jobs/list" \
-              -H "Authorization: Bearer $DATABRICKS_TOKEN" \
-              -H "Content-Type: application/json")
-            
-            # Parse job ID from the response (safely)
-            JOB_ID=$(echo "$JOBS_JSON" | grep -o '"job_id":[0-9]*' | head -1 | grep -o '[0-9]*' || echo "")
-            
-            # If no job found by listing, try to get by job name
-            if [ -z "$JOB_ID" ]; then
-              JOB_DETAILS=$(curl -s -X GET "${WORKSPACE_URL}/api/2.1/jobs/get-by-name?job_name=Real-Time-Sales-Analytics-Full-Pipeline" \
-                -H "Authorization: Bearer $DATABRICKS_TOKEN" \
-                -H "Content-Type: application/json" 2>/dev/null || echo "{}")
-              
-              JOB_ID=$(echo "$JOB_DETAILS" | grep -o '"job_id":[0-9]*' | grep -o '[0-9]*' || echo "")
-            fi
-            
-            if [ -n "$JOB_ID" ]; then
-              echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
-              echo "has_token=true" >> $GITHUB_OUTPUT
-              echo "Found job ID: $JOB_ID"
-            else
-              echo "job_id=" >> $GITHUB_OUTPUT
-              echo "has_token=true" >> $GITHUB_OUTPUT
-              echo "## ⚠️ Job not found in workspace. Will provide manual instructions." >> $GITHUB_STEP_SUMMARY
-            fi
-          else
-            echo "job_id=" >> $GITHUB_OUTPUT
-            echo "has_token=false" >> $GITHUB_OUTPUT
-            echo "No DATABRICKS_TOKEN found in Key Vault"
-          fi
-
-      - name: Run Databricks Job (Automatic)
-        if: steps.job.outputs.has_token == 'true' && steps.job.outputs.job_id != ''
-        run: |
-          WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
-          JOB_ID=${{ steps.job.outputs.job_id }}
-          DATABRICKS_TOKEN="${{ steps.pat.outputs.pat_token }}"
-          
-          echo "Starting Databricks Job: $JOB_ID"
-          curl -s -X POST "${WORKSPACE_URL}/api/2.1/jobs/run-now" \
-            -H "Authorization: Bearer $DATABRICKS_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "{\"job_id\": $JOB_ID}"
-          
-          echo "## Pipeline Started! 🚀" >> $GITHUB_STEP_SUMMARY
-          echo "Job ID $JOB_ID triggered successfully." >> $GITHUB_STEP_SUMMARY
-
-      - name: Get Databricks Job Info (Manual)
-        if: steps.job.outputs.has_token != 'true' || steps.job.outputs.job_id == ''
-        run: |
-          WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
-          WORKSPACE_NAME=${{ steps.workspace.outputs.workspace_name }}
-          
-          echo "## Databricks Pipeline Info 🚀" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Workspace URL**: $WORKSPACE_URL" >> $GITHUB_STEP_SUMMARY
-          echo "**Workspace Name**: $WORKSPACE_NAME" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "To run the pipeline:" >> $GITHUB_STEP_SUMMARY
-          echo "1. Go to: $WORKSPACE_URL" >> $GITHUB_STEP_SUMMARY
-          echo "2. Navigate to Jobs > Real-Time-Sales-Analytics-Full-Pipeline" >> $GITHUB_STEP_SUMMARY
-          echo "3. Click Run Now" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Note**: Add DATABRICKS_TOKEN to GitHub secrets to automate this step." >> $GITHUB_STEP_SUMMARY
-
-  # ==========================================================================
-  # DESTROY - Clean up all resources (use with caution!)
-  # ==========================================================================
-  destroy:
-    name: Terraform Destroy
-    runs-on: ubuntu-latest
-    if: github.event.inputs.action == 'destroy'
-    environment: production
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Create terraform.tfvars
-        run: |
-          cat > terraform/terraform.tfvars << 'EOF'
-          subscription_id = "${{ secrets.ARM_SUBSCRIPTION_ID }}"
-          tenant_id       = "${{ secrets.ARM_TENANT_ID }}"
-          client_id       = "${{ secrets.ARM_CLIENT_ID }}"
-          client_secret   = "${{ secrets.ARM_CLIENT_SECRET }}"
-          prefix          = "${{ env.PREFIX }}"
-          location        = "${{ env.LOCATION }}"
-          environment     = "${{ github.event.inputs.environment }}"
-          databricks_sku  = "${{ github.event.inputs.databricks_sku }}"
-          sql_admin_password = "${{ secrets.SQL_ADMIN_PASSWORD }}"
-          eventhub_sku           = "Standard"
-          cluster_max_workers    = 1
-          cluster_autotermination_minutes = 10
-          spark_version          = "14.3.x-scala2.12"
-          sql_database_sku       = "Free"
-          github_pat            = "${{ secrets.GH_PAT }}"
-          EOF
-
-      - name: Setup Terraform Backend
-        run: |
-          chmod +x scripts/setup_backend.sh
-          ./scripts/setup_backend.sh
-        env:
-          ENVIRONMENT: ${{ github.event.inputs.environment }}
-
-      - name: Terraform Init
-        run: cd terraform && terraform init -upgrade -backend-config=../backend_config/backend.hcl
-
-      - name: Terraform Destroy
+        if: github.event.inputs.action == 'destroy'
         run: cd terraform && terraform destroy -auto-approve -no-color
         env:
           ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
@@ -616,7 +87,81 @@ jobs:
           ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
           ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
 
-      - name: Post Destroy Summary
+      - name: Get Outputs
+        if: github.event.inputs.action == 'deploy'
         run: |
-          echo "## Resources Destroyed 🗑️" >> $GITHUB_STEP_SUMMARY
-          echo "All Azure resources have been removed." >> $GITHUB_STEP_SUMMARY
+          cd terraform
+          echo "## Deployment Outputs" >> $GITHUB_STEP_SUMMARY
+          echo "Workspace URL: https://$(terraform output -raw databricks_workspace_url)" >> $GITHUB_STEP_SUMMARY
+          echo "Storage Account: $(terraform output -raw storage_account_name)" >> $GITHUB_STEP_SUMMARY
+          echo "Job ID: $(terraform output -raw databricks_job_id)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Azure Login
+        if: github.event.inputs.action == 'deploy'
+        uses: azure/login@v1
+        with:
+          creds: '{"clientId": "${{ secrets.ARM_CLIENT_ID }}", "clientSecret": "${{ secrets.ARM_CLIENT_SECRET }}", "subscriptionId": "${{ secrets.ARM_SUBSCRIPTION_ID }}", "tenantId": "${{ secrets.ARM_TENANT_ID }}"}'
+
+      - name: Get PAT Token
+        if: github.event.inputs.action == 'deploy'
+        id: pat
+        run: |
+          cd terraform
+          PAT_TOKEN=$(terraform output -raw databricks_pat_token)
+          echo "pat_token=$PAT_TOKEN" >> $GITHUB_OUTPUT
+          echo "PAT token retrieved (${#PAT_TOKEN} chars)"
+
+      - name: Get Workspace Info
+        if: github.event.inputs.action == 'deploy'
+        id: workspace
+        run: |
+          WORKSPACE=$(az resource list --resource-type Microsoft.Databricks/workspaces --query "[0].name" -o tsv)
+          WORKSPACE_URL=$(az resource list --resource-type Microsoft.Databricks/workspaces --query "[0].properties.workspaceUrl" -o tsv)
+          echo "workspace_url=https://$WORKSPACE_URL" >> $GITHUB_OUTPUT
+          echo "Workspace: $WORKSPACE"
+
+      - name: Get Job ID
+        if: github.event.inputs.action == 'deploy'
+        id: job
+        run: |
+          WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
+          DATABRICKS_TOKEN="${{ steps.pat.outputs.pat_token }}"
+          
+          JOBS_JSON=$(curl -s -X GET "${WORKSPACE_URL}/api/2.1/jobs/list" \
+            -H "Authorization: Bearer $DATABRICKS_TOKEN" \
+            -H "Content-Type: application/json")
+          
+          JOB_ID=$(echo "$JOBS_JSON" | grep -o '"job_id":[0-9]*' | head -1 | grep -o '[0-9]*' || echo "")
+          
+          if [ -z "$JOB_ID" ]; then
+            JOB_DETAILS=$(curl -s -X GET "${WORKSPACE_URL}/api/2.1/jobs/get-by-name?job_name=Real-Time-Sales-Analytics-Full-Pipeline" \
+              -H "Authorization: Bearer $DATABRICKS_TOKEN" \
+              -H "Content-Type: application/json" 2>/dev/null || echo "{}")
+            JOB_ID=$(echo "$JOB_DETAILS" | grep -o '"job_id":[0-9]*' | grep -o '[0-9]*' || echo "")
+          fi
+          
+          if [ -n "$JOB_ID" ]; then
+            echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
+            echo "Found job ID: $JOB_ID"
+          else
+            echo "job_id=" >> $GITHUB_OUTPUT
+            echo "Job not found"
+          fi
+
+      - name: Run Databricks Job
+        if: github.event.inputs.action == 'deploy'
+        run: |
+          WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
+          JOB_ID=${{ steps.job.outputs.job_id }}
+          DATABRICKS_TOKEN="${{ steps.pat.outputs.pat_token }}"
+          
+          if [ -n "$JOB_ID" ]; then
+            echo "Starting Job: $JOB_ID"
+            curl -s -X POST "${WORKSPACE_URL}/api/2.1/jobs/run-now" \
+              -H "Authorization: Bearer $DATABRICKS_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"job_id\": $JOB_ID}"
+            echo "## Pipeline Started! Job ID: $JOB_ID" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## No Job ID found - cannot run pipeline" >> $GITHUB_STEP_SUMMARY
+          fi
