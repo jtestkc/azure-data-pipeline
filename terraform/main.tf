@@ -278,116 +278,10 @@ resource "azurerm_databricks_workspace" "main" {
 }
 
 # ============================================================================
-# DATABRICKS CLUSTER — Single-node, auto-terminating
-# Cost optimization: 1 worker, terminate after 10 min idle
+# NOTE: Databricks Clusters are NOT created in Terraform
+# Instead, we use JOB CLUSTERS - created automatically when job runs
+# This saves cost - cluster only runs when pipeline executes
 # ============================================================================
-resource "databricks_cluster" "main" {
-  cluster_name            = "${var.prefix}-analytics-cluster"
-  spark_version           = var.spark_version
-  node_type_id            = var.cluster_node_type
-  autotermination_minutes = var.cluster_autotermination_minutes
-  num_workers             = 1
-  data_security_mode      = "SINGLE_USER"
-
-  spark_conf = {
-    # Storage Access
-    "fs.azure.account.key.${azurerm_storage_account.datalake.name}.dfs.core.windows.net" = azurerm_storage_account.datalake.primary_access_key
-
-    # Delta optimizations
-    "spark.databricks.delta.optimizeWrite.enabled" = "true"
-    "spark.databricks.delta.autoCompact.enabled"   = "true"
-  }
-
-  custom_tags = {
-    "ResourceClass" = "Standard"
-  }
-
-  # Libraries - Using built-in Kafka connector (no need for azure-eventhubs-spark)
-  library {
-    pypi {
-      package = "azure-eventhub>=5.0.0"
-    }
-  }
-  library {
-    pypi {
-      package = "faker>=22.0.0"
-    }
-  }
-  library {
-    pypi {
-      package = "mlflow>=2.10.0"
-    }
-  }
-  library {
-    pypi {
-      package = "langchain>=0.1.0"
-    }
-  }
-
-  depends_on = [azurerm_databricks_workspace.main]
-}
-
-# ============================================================================
-# GENAI CLUSTER — Cost-optimized for GenAI tasks with Spot Instances
-# Uses spot instances for 60-70% cost savings
-# Only deployed when enable_genai = true
-# ============================================================================
-resource "databricks_cluster" "genai" {
-  count = var.enable_genai ? 1 : 0
-
-  cluster_name            = "${var.prefix}-genai-cluster"
-  spark_version           = var.spark_version
-  node_type_id            = "Standard_DS3_v2"
-  autotermination_minutes = 15
-  num_workers             = 1
-  data_security_mode      = "SINGLE_USER"
-
-  # Enable spot instances for cost savings (60-70% cheaper)
-  azure_attributes {
-    availability = "SPOT_AZURE"
-  }
-
-  spark_conf = {
-    # Storage Access
-    "fs.azure.account.key.${azurerm_storage_account.datalake.name}.dfs.core.windows.net" = azurerm_storage_account.datalake.primary_access_key
-
-    # Delta optimizations
-    "spark.databricks.delta.optimizeWrite.enabled" = "true"
-    "spark.databricks.delta.autoCompact.enabled"   = "true"
-
-    # MLflow
-    "spark.mlflow.trackingUri" = "databricks"
-  }
-
-  custom_tags = {
-    "ResourceClass" = "GenAI"
-    "CostCenter"    = "Dev/Test"
-    "UseSpot"       = "true"
-  }
-
-  library {
-    pypi {
-      package = "mlflow>=2.10.0"
-    }
-  }
-  library {
-    pypi {
-      package = "langchain>=0.1.0"
-    }
-  }
-  library {
-    pypi {
-      package = "databricks-vector-search"
-    }
-  }
-  library {
-    pypi {
-      package = "faker>=22.0.0"
-    }
-  }
-
-  depends_on = [azurerm_databricks_workspace.main]
-}
 
 # ============================================================================
 # DATABRICKS SECRET SCOPE — backed by Azure Key Vault
@@ -571,13 +465,30 @@ resource "databricks_workspace_file" "config_connection" {
 
 # ============================================================================
 # DATABRICKS WORKFLOW JOBS
+# Uses JOB CLUSTERS - created automatically when job runs
+# This saves cost - cluster only runs when pipeline executes
 # ============================================================================
 resource "databricks_job" "pipeline" {
   name = "Real-Time-Sales-Analytics-Full-Pipeline"
 
+  # Define job cluster - created when job runs
+  job_cluster {
+    job_cluster_key = "pipeline_cluster"
+    new_cluster {
+      node_type_id  = var.cluster_node_type
+      num_workers   = var.cluster_max_workers
+      spark_version = var.spark_version
+
+      spark_conf = {
+        "spark.databricks.delta.optimizeWrite.enabled" = "true"
+        "spark.databricks.delta.autoCompact.enabled"   = "true"
+      }
+    }
+  }
+
   task {
-    task_key            = "ingest_bronze"
-    existing_cluster_id = databricks_cluster.main.id
+    task_key        = "ingest_bronze"
+    job_cluster_key = "pipeline_cluster"
     notebook_task {
       notebook_path = databricks_notebook.notebook_bronze.path
       base_parameters = {
@@ -588,11 +499,23 @@ resource "databricks_job" "pipeline" {
   }
 
   task {
-    task_key = "transform_silver"
+    task_key        = "ingest_bronze"
+    job_cluster_key = "pipeline_cluster"
+    notebook_task {
+      notebook_path = databricks_notebook.notebook_bronze.path
+      base_parameters = {
+        "reset_checkpoint" = "true"
+        "reset_data"       = "true"
+      }
+    }
+  }
+
+  task {
+    task_key        = "transform_silver"
+    job_cluster_key = "pipeline_cluster"
     depends_on {
       task_key = "ingest_bronze"
     }
-    existing_cluster_id = databricks_cluster.main.id
     notebook_task {
       notebook_path = databricks_notebook.notebook_silver.path
       base_parameters = {
@@ -602,11 +525,11 @@ resource "databricks_job" "pipeline" {
   }
 
   task {
-    task_key = "aggregate_gold"
+    task_key        = "aggregate_gold"
+    job_cluster_key = "pipeline_cluster"
     depends_on {
       task_key = "transform_silver"
     }
-    existing_cluster_id = databricks_cluster.main.id
     notebook_task {
       notebook_path = databricks_notebook.notebook_gold.path
       base_parameters = {
@@ -616,11 +539,11 @@ resource "databricks_job" "pipeline" {
   }
 
   task {
-    task_key = "sql_enrichment"
+    task_key        = "sql_enrichment"
+    job_cluster_key = "pipeline_cluster"
     depends_on {
       task_key = "aggregate_gold"
     }
-    existing_cluster_id = databricks_cluster.main.id
     notebook_task {
       notebook_path = databricks_notebook.notebook_enrichment.path
       base_parameters = {
@@ -630,14 +553,11 @@ resource "databricks_job" "pipeline" {
   }
 
   task {
-    task_key = "create_dashboard_views"
+    task_key        = "create_dashboard_views"
+    job_cluster_key = "pipeline_cluster"
     depends_on {
       task_key = "sql_enrichment"
     }
-    depends_on {
-      task_key = "aggregate_gold"
-    }
-    existing_cluster_id = databricks_cluster.main.id
     notebook_task {
       notebook_path   = databricks_notebook.notebook_sql_views.path
       base_parameters = {}
@@ -645,11 +565,11 @@ resource "databricks_job" "pipeline" {
   }
 
   task {
-    task_key = "sql_dashboard"
+    task_key        = "sql_dashboard"
+    job_cluster_key = "pipeline_cluster"
     depends_on {
       task_key = "create_dashboard_views"
     }
-    existing_cluster_id = databricks_cluster.main.id
     notebook_task {
       notebook_path   = databricks_notebook.notebook_sql_dashboard.path
       base_parameters = {}
@@ -662,117 +582,14 @@ resource "databricks_job" "pipeline" {
 }
 
 # ============================================================================
-# GENAI WORKFLOW JOB
-# Only created when enable_genai = true
+# GENAI WORKFLOW JOB - DISABLED FOR NOW
+# Enable by setting enable_genai = true in terraform.tfvars
 # ============================================================================
-resource "databricks_job" "genai_pipeline" {
-  count = var.enable_genai ? 1 : 0
-
-  name = "GenAI-Pipeline-Mosaic-AI"
-
-  task {
-    task_key            = "model_serving_deploy"
-    existing_cluster_id = databricks_cluster.genai[0].id
-    notebook_task {
-      notebook_path = databricks_notebook.notebook_model_serving[0].path
-      base_parameters = {
-        "action" = "deploy"
-      }
-    }
-  }
-
-  task {
-    task_key            = "load_test_model"
-    existing_cluster_id = databricks_cluster.genai[0].id
-    notebook_task {
-      notebook_path = databricks_notebook.notebook_model_serving[0].path
-      base_parameters = {
-        "action" = "load_test"
-      }
-    }
-    depends_on {
-      task_key = "model_serving_deploy"
-    }
-  }
-
-  task {
-    task_key            = "rag_build_index"
-    existing_cluster_id = databricks_cluster.genai[0].id
-    notebook_task {
-      notebook_path = databricks_notebook.notebook_rag_pipeline[0].path
-      base_parameters = {
-        "action" = "build_vector_index"
-      }
-    }
-  }
-
-  task {
-    task_key            = "rag_evaluate"
-    existing_cluster_id = databricks_cluster.genai[0].id
-    notebook_task {
-      notebook_path = databricks_notebook.notebook_rag_pipeline[0].path
-      base_parameters = {
-        "action" = "evaluate"
-      }
-    }
-    depends_on {
-      task_key = "rag_build_index"
-    }
-  }
-
-  task {
-    task_key            = "ai_agent_build"
-    existing_cluster_id = databricks_cluster.genai[0].id
-    notebook_task {
-      notebook_path = databricks_notebook.notebook_ai_agent[0].path
-      base_parameters = {
-        "action" = "build"
-      }
-    }
-    depends_on {
-      task_key = "rag_evaluate"
-    }
-  }
-
-  task {
-    task_key            = "llm_dq_checker"
-    existing_cluster_id = databricks_cluster.genai[0].id
-    notebook_task {
-      notebook_path   = databricks_notebook.notebook_llm_dq_checker[0].path
-      base_parameters = {}
-    }
-  }
-
-  task {
-    task_key            = "finetuning_train"
-    existing_cluster_id = databricks_cluster.genai[0].id
-    notebook_task {
-      notebook_path = databricks_notebook.notebook_finetuning[0].path
-      base_parameters = {
-        "action" = "train"
-      }
-    }
-  }
-
-  task {
-    task_key            = "governance_setup"
-    existing_cluster_id = databricks_cluster.genai[0].id
-    notebook_task {
-      notebook_path = databricks_notebook.notebook_governance[0].path
-      base_parameters = {
-        "action" = "setup_monitoring"
-      }
-    }
-    depends_on {
-      task_key = "llm_dq_checker"
-    }
-  }
-
-  email_notifications {
-    on_failure = ["imjaykc31@gmail.com"]
-    on_success = ["imjaykc31@gmail.com"]
-  }
-}
+# resource "databricks_job" "genai_pipeline" {
+#   count = var.enable_genai ? 1 : 0
+#   name = "GenAI-Pipeline-Mosaic-AI"
+#   # Uses job clusters - created when job runs
+# }
 
 # ============================================================================
 # DATABRICKS WORKSPACE ACCESS (ADMIN)

@@ -68,8 +68,9 @@ output "log_analytics_workspace_id" {
 }
 
 output "databricks_cluster_id" {
-  description = "Databricks cluster ID to attach jobs/notebooks to"
-  value       = databricks_cluster.main.id
+  description = "Databricks cluster ID - cluster is created by Job when pipeline runs"
+  # Cluster is created by job_cluster when pipeline runs
+  value = "Job will create cluster automatically when run"
 }
 
 output "secret_scope_name" {
