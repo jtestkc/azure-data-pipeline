@@ -309,17 +309,11 @@ jobs:
         with:
           creds: '{"clientId": "${{ secrets.ARM_CLIENT_ID }}", "clientSecret": "${{ secrets.ARM_CLIENT_SECRET }}", "subscriptionId": "${{ secrets.ARM_SUBSCRIPTION_ID }}", "tenantId": "${{ secrets.ARM_TENANT_ID }}"}'
 
-      - name: Get Key Vault Name
-        id: kv
-        run: |
-          KEYVAULT_NAME=$(az keyvault list --resource-group "rg-rtsa-dev" --query "[0].name" -o tsv)
-          echo "keyvault_name=$KEYVAULT_NAME" >> $GITHUB_OUTPUT
-
-      - name: Get Databricks PAT Token from Key Vault
+      - name: Get Databricks PAT Token from Terraform
         id: pat
         run: |
-          KEYVAULT_NAME=$(az keyvault list --resource-group "rg-rtsa-dev" --query "[0].name" -o tsv)
-          PAT_TOKEN=$(az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "databricks-pat-token" --query "value" -o tsv)
+          cd terraform
+          PAT_TOKEN=$(terraform output -raw databricks_pat_token)
           echo "pat_token=$PAT_TOKEN" >> $GITHUB_OUTPUT
 
       - name: Get Databricks Workspace Details
@@ -446,23 +440,32 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Setup Terraform Backend
+        run: |
+          chmod +x scripts/setup_backend.sh
+          ./scripts/setup_backend.sh
+        env:
+          ENVIRONMENT: ${{ github.event.inputs.environment }}
+
+      - name: Terraform Init
+        run: cd terraform && terraform init -upgrade -backend-config=../backend_config/backend.hcl
+
+      - name: Get Databricks PAT Token from Terraform
+        id: pat
+        run: |
+          cd terraform
+          PAT_TOKEN=$(terraform output -raw databricks_pat_token)
+          echo "pat_token=$PAT_TOKEN" >> $GITHUB_OUTPUT
+
       - name: Azure Login
         uses: azure/login@v1
         with:
           creds: '{"clientId": "${{ secrets.ARM_CLIENT_ID }}", "clientSecret": "${{ secrets.ARM_CLIENT_SECRET }}", "subscriptionId": "${{ secrets.ARM_SUBSCRIPTION_ID }}", "tenantId": "${{ secrets.ARM_TENANT_ID }}"}'
-
-      - name: Get Key Vault Name
-        id: kv
-        run: |
-          KEYVAULT_NAME=$(az keyvault list --resource-group "rg-rtsa-dev" --query "[0].name" -o tsv)
-          echo "keyvault_name=$KEYVAULT_NAME" >> $GITHUB_OUTPUT
-
-      - name: Get Databricks PAT Token from Key Vault
-        id: pat
-        run: |
-          KEYVAULT_NAME=$(az keyvault list --resource-group "rg-rtsa-dev" --query "[0].name" -o tsv)
-          PAT_TOKEN=$(az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "databricks-pat-token" --query "value" -o tsv)
-          echo "pat_token=$PAT_TOKEN" >> $GITHUB_OUTPUT
 
       - name: Get Databricks Workspace Details
         id: workspace

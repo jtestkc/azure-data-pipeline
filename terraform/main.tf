@@ -631,14 +631,8 @@ resource "databricks_token" "sp_token" {
   lifetime_seconds = 2592000 # 30 days
 }
 
-# Store PAT token in Azure Key Vault for GitHub Actions to retrieve
-resource "azurerm_key_vault_secret" "databricks_pat" {
-  name         = "databricks-pat-token"
-  value        = databricks_token.sp_token.token_value
-  key_vault_id = module.storage.key_vault_id
-
-  depends_on = [databricks_token.sp_token]
-}
+# Note: PAT token is available via terraform output databricks_pat_token
+# GitHub Actions will retrieve it directly from terraform state
 
 # ============================================================================
 # ZERO-TOUCH CI/CD AUTOCONFIGURATION
