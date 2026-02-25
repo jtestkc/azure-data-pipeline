@@ -17,62 +17,20 @@ env:
   ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
   ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
   ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+  WORKSPACE_URL: "https://adb-7405615650097771.11.azuredatabricks.net"
+  JOB_ID: "821578738640099"
+  # Add PAT token to GitHub secrets as DATABRICKS_TOKEN
 
 jobs:
   run-pipeline:
     name: Run Databricks Pipeline
     runs-on: ubuntu-latest
     steps:
-      - name: Azure Login
-        uses: azure/login@v1
-        with:
-          creds: '{"clientId": "${{ secrets.ARM_CLIENT_ID }}", "clientSecret": "${{ secrets.ARM_CLIENT_SECRET }}", "subscriptionId": "${{ secrets.ARM_SUBSCRIPTION_ID }}", "tenantId": "${{ secrets.ARM_TENANT_ID }}"}'
-
-      - name: Get Workspace Info
-        id: workspace
-        run: |
-          WORKSPACE=$(az resource list -g rg-rtsaa12e00-dev --resource-type Microsoft.Databricks/workspaces --query "[0].name" -o tsv)
-          WORKSPACE_URL=$(az resource list -g rg-rtsaa12e00-dev --resource-type Microsoft.Databricks/workspaces --query "[0].properties.workspaceUrl" -o tsv)
-          echo "workspace_url=$WORKSPACE_URL" >> $GITHUB_OUTPUT
-          echo "Workspace: $WORKSPACE"
-
-      - name: Get PAT Token
-        id: pat
-        run: |
-          # Get PAT from Key Vault
-          KEYVAULT=$(az key vault list -g rg-rtsaa12e00-dev --query "[0].name" -o tsv)
-          PAT_TOKEN=$(az keyvault secret show --vault-name "$KEYVAULT" --name "databricks-pat-token" --query "value" -o tsv)
-          echo "pat_token=$PAT_TOKEN" >> $GITHUB_OUTPUT
-
-      - name: Get Job ID
-        id: job
-        run: |
-          WORKSPACE_URL="https://${{ steps.workspace.outputs.workspace_url }}"
-          DATABRICKS_TOKEN="${{ steps.pat.outputs.pat_token }}"
-          
-          echo "Querying: $WORKSPACE_URL"
-          
-          JOBS_JSON=$(curl -s -X GET "${WORKSPACE_URL}/api/2.1/jobs/list" \
-            -H "Authorization: Bearer $DATABRICKS_TOKEN" \
-            -H "Content-Type: application/json")
-          
-          JOB_ID=$(echo "$JOBS_JSON" | grep -o '"job_id":[0-9]*' | head -1 | grep -o '[0-9]*' || echo "")
-          
-          if [ -z "$JOB_ID" ]; then
-            JOB_DETAILS=$(curl -s -X GET "${WORKSPACE_URL}/api/2.1/jobs/get-by-name?job_name=Real-Time-Sales-Analytics-Full-Pipeline" \
-              -H "Authorization: Bearer $DATABRICKS_TOKEN" \
-              -H "Content-Type: application/json" 2>/dev/null || echo "{}")
-            JOB_ID=$(echo "$JOB_DETAILS" | grep -o '"job_id":[0-9]*' | grep -o '[0-9]*' || echo "")
-          fi
-          
-          echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
-          echo "Job ID: $JOB_ID"
-
       - name: Run Databricks Job
         run: |
-          WORKSPACE_URL="https://${{ steps.workspace.outputs.workspace_url }}"
-          JOB_ID=${{ steps.job.outputs.job_id }}
-          DATABRICKS_TOKEN="${{ steps.pat.outputs.pat_token }}"
+          DATABRICKS_TOKEN="${{ secrets.DATABRICKS_TOKEN }}"
+          
+          echo "Starting Job: $JOB_ID"
           
           curl -s -X POST "${WORKSPACE_URL}/api/2.1/jobs/run-now" \
             -H "Authorization: Bearer $DATABRICKS_TOKEN" \
@@ -80,3 +38,35 @@ jobs:
             -d "{\"job_id\": $JOB_ID}"
           
           echo "## Pipeline Started! Job ID: $JOB_ID" >> $GITHUB_STEP_SUMMARY
+
+  destroy:
+    name: Destroy Resources
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.6.0"
+
+      - name: Setup Terraform Backend
+        run: |
+          chmod +x scripts/setup_backend.sh
+          ./scripts/setup_backend.sh
+        env:
+          ENVIRONMENT: dev
+          PREFIX: rtsa
+          LOCATION: eastus
+
+      - name: Terraform Init
+        run: cd terraform && terraform init -upgrade -backend-config=../backend_config/backend.hcl
+
+      - name: Terraform Destroy
+        run: cd terraform && terraform destroy -auto-approve -no-color
+        env:
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
