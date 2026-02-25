@@ -305,7 +305,7 @@ jobs:
           echo "All resources created during failed deployment have been destroyed." >> $GITHUB_STEP_SUMMARY
 
   # ==========================================================================
-  # RUN PIPELINE - Trigger Databricks Job
+  # RUN PIPELINE - Trigger Databricks Job after deploy completes
   # ==========================================================================
   # Note: To trigger Databricks jobs from GitHub Actions, you need to:
   # 1. Create a Databricks PAT token in Databricks UI
@@ -315,7 +315,7 @@ jobs:
   run-pipeline:
     name: Run Databricks Pipeline
     runs-on: ubuntu-latest
-    needs: plan
+    needs: [plan, deploy]
     if: github.event.inputs.action == 'run-pipeline' || github.event.inputs.action == 'full-cycle'
     steps:
       - name: Checkout code
