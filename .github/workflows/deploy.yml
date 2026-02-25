@@ -118,18 +118,21 @@ jobs:
           WORKSPACE=$(az resource list --resource-type Microsoft.Databricks/workspaces --query "[0].name" -o tsv)
           WORKSPACE_URL=$(az resource list --resource-type Microsoft.Databricks/workspaces --query "[0].properties.workspaceUrl" -o tsv)
           echo "workspace_url=https://$WORKSPACE_URL" >> $GITHUB_OUTPUT
+          echo "workspace_url_only=$WORKSPACE_URL" >> $GITHUB_OUTPUT
           echo "Workspace: $WORKSPACE"
 
       - name: Get Job ID
         if: github.event.inputs.action == 'deploy'
         id: job
         run: |
-          WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
+          WORKSPACE_URL="https://${{ steps.workspace.outputs.workspace_url_only }}"
           DATABRICKS_TOKEN="${{ steps.pat.outputs.pat_token }}"
+          
+          echo "Querying jobs from: $WORKSPACE_URL"
           
           JOBS_JSON=$(curl -s -X GET "${WORKSPACE_URL}/api/2.1/jobs/list" \
             -H "Authorization: Bearer $DATABRICKS_TOKEN" \
-            -H "Content-Type: application/json")
+            -H "Content-Type: application/json") || echo '{"jobs":[]}'
           
           JOB_ID=$(echo "$JOBS_JSON" | grep -o '"job_id":[0-9]*' | head -1 | grep -o '[0-9]*' || echo "")
           
@@ -151,7 +154,7 @@ jobs:
       - name: Run Databricks Job
         if: github.event.inputs.action == 'deploy'
         run: |
-          WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
+          WORKSPACE_URL="https://${{ steps.workspace.outputs.workspace_url_only }}"
           JOB_ID=${{ steps.job.outputs.job_id }}
           DATABRICKS_TOKEN="${{ steps.pat.outputs.pat_token }}"
           
