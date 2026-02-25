@@ -1,0 +1,47 @@
+{
+  "name": "Sales Analytics Dashboard",
+  "version": "2.0",
+  "widgets": [
+    {
+      "id": "w1",
+      "title": "Total Revenue",
+      "visualization": "counter",
+      "query_id": "q1",
+      "position": {"x": 0, "y": 0, "w": 4, "h": 3}
+    },
+    {
+      "id": "w2",
+      "title": "Regional Performance",
+      "visualization": "table",
+      "query_id": "q2", 
+      "position": {"x": 4, "y": 0, "w": 8, "h": 6}
+    },
+    {
+      "id": "w3",
+      "title": "Top Products",
+      "visualization": "bar",
+      "query_id": "q3",
+      "position": {"x": 0, "y": 3, "w": 4, "h": 6}
+    }
+  ],
+  "queries": [
+    {
+      "id": "q1",
+      "name": "Total Revenue",
+      "query": "SELECT SUM(total_revenue) as revenue, SUM(total_orders) as orders FROM delta.`abfss://rawdata@adlsrtsae23474.dfs.core.windows.net/gold/regional_performance`",
+      "warehouse_id": "bf73871a84a8740a"
+    },
+    {
+      "id": "q2", 
+      "name": "Regional Performance",
+      "query": "SELECT region, total_revenue, total_orders FROM delta.`abfss://rawdata@adlsrtsae23474.dfs.core.windows.net/gold/regional_performance` ORDER BY total_revenue DESC",
+      "warehouse_id": "bf73871a84a8740a"
+    },
+    {
+      "id": "q3",
+      "name": "Top Products",
+      "query": "SELECT product_name, revenue FROM delta.`abfss://rawdata@adlsrtsae23474.dfs.core.windows.net/gold/top_products` ORDER BY revenue DESC LIMIT 10",
+      "warehouse_id": "bf73871a84a8740a"
+    }
+  ]
+}
