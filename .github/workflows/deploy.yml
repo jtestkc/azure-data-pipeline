@@ -218,9 +218,10 @@ jobs:
         run: |
           cd terraform
           PAT_TOKEN=$(terraform output -raw databricks_pat_token)
+          cd ..
           # Save to output for use in subsequent jobs
           echo "pat_token_length=${#PAT_TOKEN}" >> $GITHUB_OUTPUT
-          # Save to file for artifact
+          # Save to file for artifact (in root directory)
           echo "$PAT_TOKEN" > pat_token.txt
           echo "PAT token retrieved successfully"
 
