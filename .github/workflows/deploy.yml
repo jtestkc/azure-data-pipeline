@@ -213,6 +213,24 @@ jobs:
           path: apply_output.txt
           retention-days: 7
 
+      - name: Get Databricks PAT Token
+        id: get_pat_token
+        run: |
+          cd terraform
+          PAT_TOKEN=$(terraform output -raw databricks_pat_token)
+          # Save to output for use in subsequent jobs
+          echo "pat_token_length=${#PAT_TOKEN}" >> $GITHUB_OUTPUT
+          # Save to file for artifact
+          echo "$PAT_TOKEN" > pat_token.txt
+          echo "PAT token retrieved successfully"
+
+      - name: Upload PAT Token
+        uses: actions/upload-artifact@v4
+        with:
+          name: databricks-pat-token
+          path: pat_token.txt
+          retention-days: 1
+
       - name: Post Apply Summary
         run: |
           echo "## Deployment Complete! 🎉" >> $GITHUB_STEP_SUMMARY
@@ -226,13 +244,10 @@ jobs:
           echo "- Databricks Workspace" >> $GITHUB_STEP_SUMMARY
           echo "- Log Analytics Workspace" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Databricks PAT Token:" >> $GITHUB_STEP_SUMMARY
-          echo "Run this command to get the token:" >> $GITHUB_STEP_SUMMARY
-          echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo 'cd terraform && terraform output -raw databricks_pat_token' >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Important**: Add this token to GitHub Secrets as DATABRICKS_TOKEN to enable automatic pipeline triggers." >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Download the PAT token from workflow artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "2. Add it to GitHub Secrets as DATABRICKS_TOKEN" >> $GITHUB_STEP_SUMMARY
+          echo "3. Run workflow with 'run-pipeline' or 'full-cycle' to trigger Databricks pipeline" >> $GITHUB_STEP_SUMMARY
 
   # ==========================================================================
   # CLEANUP - Run on failure to destroy resources
