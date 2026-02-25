@@ -367,36 +367,36 @@ jobs:
           WORKSPACE_NAME=${{ steps.workspace.outputs.workspace_name }}
           
           if [ -n "${{ secrets.DATABRICKS_TOKEN }}" ]; then
-            # Try to get job list using the new API endpoint (more reliable)
+            # Get job list using the API
             JOBS_JSON=$(curl -s -X GET "${WORKSPACE_URL}/api/2.1/jobs/list" \
               -H "Authorization: Bearer ${{ secrets.DATABRICKS_TOKEN }}" \
               -H "Content-Type: application/json")
             
-            # Parse job ID from the response
-            JOB_ID=$(echo $JOBS_JSON | grep -o '"job_id":[0-9]*' | head -1 | grep -o '[0-9]*')
+            # Parse job ID from the response (safely)
+            JOB_ID=$(echo "$JOBS_JSON" | grep -o '"job_id":[0-9]*' | head -1 | grep -o '[0-9]*' || echo "")
             
-            # If no job found, check if job exists by name
+            # If no job found by listing, try to get by job name
             if [ -z "$JOB_ID" ]; then
-              # Get job details by name
-              JOB_DETAILS=$(curl -s -X GET "${WORKSPACE_URL}/api/2.1/jobs/get?job_id=0" \
+              JOB_DETAILS=$(curl -s -X GET "${WORKSPACE_URL}/api/2.1/jobs/get-by-name?job_name=Real-Time-Sales-Analytics-Full-Pipeline" \
                 -H "Authorization: Bearer ${{ secrets.DATABRICKS_TOKEN }}" \
-                -H "Content-Type: application/json" 2>/dev/null)
+                -H "Content-Type: application/json" 2>/dev/null || echo "{}")
               
-              # Try to find the pipeline job by name
-              JOB_ID=$(echo "$JOB_DETAILS" | grep -o '"job_id":[0-9]*' | head -1 | grep -o '[0-9]*')
+              JOB_ID=$(echo "$JOB_DETAILS" | grep -o '"job_id":[0-9]*' | grep -o '[0-9]*' || echo "")
             fi
             
             if [ -n "$JOB_ID" ]; then
               echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
               echo "has_token=true" >> $GITHUB_OUTPUT
+              echo "Found job ID: $JOB_ID"
             else
               echo "job_id=" >> $GITHUB_OUTPUT
               echo "has_token=true" >> $GITHUB_OUTPUT
-              echo "## ⚠️ Job not found in workspace. Please run the pipeline manually from Databricks UI." >> $GITHUB_STEP_SUMMARY
+              echo "## ⚠️ Job not found in workspace. Will provide manual instructions." >> $GITHUB_STEP_SUMMARY
             fi
           else
             echo "job_id=" >> $GITHUB_OUTPUT
             echo "has_token=false" >> $GITHUB_OUTPUT
+            echo "No DATABRICKS_TOKEN found in secrets"
           fi
 
       - name: Run Databricks Job (Automatic)
