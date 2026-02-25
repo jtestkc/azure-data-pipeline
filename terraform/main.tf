@@ -328,16 +328,18 @@ resource "databricks_cluster" "main" {
 }
 
 # ============================================================================
-# GENAI CLUSTER — GPU-enabled for Model Serving and Fine-tuning
+# GENAI CLUSTER — Cost-optimized for GenAI tasks
+# Uses single worker, shorter autotermination, smaller nodes
 # ============================================================================
 resource "databricks_cluster" "genai" {
   cluster_name            = "${var.prefix}-genai-cluster"
   spark_version           = var.spark_version
-  node_type_id            = "Standard_DS4_v2" # Better compute for GenAI
-  autotermination_minutes = 60                # Longer running for GenAI tasks
-  num_workers             = 2
+  node_type_id            = "Standard_DS3_v2" # Smaller than DS4_v2, cheaper
+  autotermination_minutes = 15                # Terminate after 15 min idle (saves ~75%)
+  num_workers             = 1                 # Single worker (sufficient for most tasks)
   data_security_mode      = "SINGLE_USER"
 
+  # Enable Photon for faster & cheaper compute
   spark_conf = {
     # Storage Access
     "fs.azure.account.key.${azurerm_storage_account.datalake.name}.dfs.core.windows.net" = azurerm_storage_account.datalake.primary_access_key
@@ -352,6 +354,7 @@ resource "databricks_cluster" "genai" {
 
   custom_tags = {
     "ResourceClass" = "GenAI"
+    "CostCenter"    = "Dev/Test"
   }
 
   library {
