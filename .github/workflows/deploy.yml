@@ -312,13 +312,13 @@ jobs:
       - name: Get Key Vault Name
         id: kv
         run: |
-          KEYVAULT_NAME=$(az key vault list --resource-group "rg-rtsa-dev" --query "[0].name" -o tsv)
+          KEYVAULT_NAME=$(az keyvault list --resource-group "rg-rtsa-dev" --query "[0].name" -o tsv)
           echo "keyvault_name=$KEYVAULT_NAME" >> $GITHUB_OUTPUT
 
       - name: Get Databricks PAT Token from Key Vault
         id: pat
         run: |
-          KEYVAULT_NAME=$(az key vault list --resource-group "rg-rtsa-dev" --query "[0].name" -o tsv)
+          KEYVAULT_NAME=$(az keyvault list --resource-group "rg-rtsa-dev" --query "[0].name" -o tsv)
           PAT_TOKEN=$(az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "databricks-pat-token" --query "value" -o tsv)
           echo "pat_token=$PAT_TOKEN" >> $GITHUB_OUTPUT
 
@@ -454,13 +454,13 @@ jobs:
       - name: Get Key Vault Name
         id: kv
         run: |
-          KEYVAULT_NAME=$(az key vault list --resource-group "rg-rtsa-dev" --query "[0].name" -o tsv)
+          KEYVAULT_NAME=$(az keyvault list --resource-group "rg-rtsa-dev" --query "[0].name" -o tsv)
           echo "keyvault_name=$KEYVAULT_NAME" >> $GITHUB_OUTPUT
 
       - name: Get Databricks PAT Token from Key Vault
         id: pat
         run: |
-          KEYVAULT_NAME=$(az key vault list --resource-group "rg-rtsa-dev" --query "[0].name" -o tsv)
+          KEYVAULT_NAME=$(az keyvault list --resource-group "rg-rtsa-dev" --query "[0].name" -o tsv)
           PAT_TOKEN=$(az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "databricks-pat-token" --query "value" -o tsv)
           echo "pat_token=$PAT_TOKEN" >> $GITHUB_OUTPUT
 
