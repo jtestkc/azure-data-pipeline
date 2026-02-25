@@ -153,3 +153,10 @@ variable "github_pat" {
   sensitive   = true
   default     = ""
 }
+
+# ── GenAI Module Toggle ───────────────────────────────────────────────────────
+variable "enable_genai" {
+  description = "Enable GenAI resources (Model Serving, RAG, Agent, Fine-tuning)"
+  type        = bool
+  default     = false # Default off - only deploy when explicitly enabled
+}

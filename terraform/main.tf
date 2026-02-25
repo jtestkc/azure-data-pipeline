@@ -330,13 +330,16 @@ resource "databricks_cluster" "main" {
 # ============================================================================
 # GENAI CLUSTER — Cost-optimized for GenAI tasks with Spot Instances
 # Uses spot instances for 60-70% cost savings
+# Only deployed when enable_genai = true
 # ============================================================================
 resource "databricks_cluster" "genai" {
+  count = var.enable_genai ? 1 : 0
+
   cluster_name            = "${var.prefix}-genai-cluster"
   spark_version           = var.spark_version
   node_type_id            = "Standard_DS3_v2"
-  autotermination_minutes = 15 # Terminate after 15 min idle
-  num_workers             = 1  # Single worker
+  autotermination_minutes = 15
+  num_workers             = 1
   data_security_mode      = "SINGLE_USER"
 
   # Enable spot instances for cost savings (60-70% cheaper)
@@ -504,11 +507,13 @@ resource "databricks_notebook" "notebook_sql_dashboard" {
 }
 
 # ============================================================================
-# GENAI NOTEBOOKS (Section 9)
+# GENAI NOTEBOOKS (Section 9) - Only deployed when enable_genai = true
 # ============================================================================
 
 # 9.1 Model Serving with Mosaic AI
 resource "databricks_notebook" "notebook_model_serving" {
+  count = var.enable_genai ? 1 : 0
+
   source   = "${path.module}/../notebooks/09_genai/model_serving/model_serving.py"
   path     = "/Shared/notebooks/09_genai/model_serving"
   language = "PYTHON"
@@ -516,6 +521,8 @@ resource "databricks_notebook" "notebook_model_serving" {
 
 # 9.2 RAG Pipeline with Vector Search
 resource "databricks_notebook" "notebook_rag_pipeline" {
+  count = var.enable_genai ? 1 : 0
+
   source   = "${path.module}/../notebooks/09_genai/rag/rag_pipeline.py"
   path     = "/Shared/notebooks/09_genai/rag_pipeline"
   language = "PYTHON"
@@ -523,6 +530,8 @@ resource "databricks_notebook" "notebook_rag_pipeline" {
 
 # 9.3 AI Sales Agent
 resource "databricks_notebook" "notebook_ai_agent" {
+  count = var.enable_genai ? 1 : 0
+
   source   = "${path.module}/../notebooks/09_genai/ai_agent/ai_sales_agent.py"
   path     = "/Shared/notebooks/09_genai/ai_sales_agent"
   language = "PYTHON"
@@ -530,6 +539,8 @@ resource "databricks_notebook" "notebook_ai_agent" {
 
 # 9.4 LLM Data Quality Checker
 resource "databricks_notebook" "notebook_llm_dq_checker" {
+  count = var.enable_genai ? 1 : 0
+
   source   = "${path.module}/../notebooks/09_genai/llm_checker/llm_data_quality_checker.py"
   path     = "/Shared/notebooks/09_genai/llm_dq_checker"
   language = "PYTHON"
@@ -537,6 +548,8 @@ resource "databricks_notebook" "notebook_llm_dq_checker" {
 
 # 9.5 Fine-tuning
 resource "databricks_notebook" "notebook_finetuning" {
+  count = var.enable_genai ? 1 : 0
+
   source   = "${path.module}/../notebooks/09_genai/finetuning/finetuning.py"
   path     = "/Shared/notebooks/09_genai/finetuning"
   language = "PYTHON"
@@ -544,6 +557,8 @@ resource "databricks_notebook" "notebook_finetuning" {
 
 # 9.6 Governance & Guardrails
 resource "databricks_notebook" "notebook_governance" {
+  count = var.enable_genai ? 1 : 0
+
   source   = "${path.module}/../notebooks/09_genai/governance/governai_guardrails.py"
   path     = "/Shared/notebooks/09_genai/governance"
   language = "PYTHON"
@@ -648,15 +663,18 @@ resource "databricks_job" "pipeline" {
 
 # ============================================================================
 # GENAI WORKFLOW JOB
+# Only created when enable_genai = true
 # ============================================================================
 resource "databricks_job" "genai_pipeline" {
+  count = var.enable_genai ? 1 : 0
+
   name = "GenAI-Pipeline-Mosaic-AI"
 
   task {
     task_key            = "model_serving_deploy"
-    existing_cluster_id = databricks_cluster.genai.id
+    existing_cluster_id = databricks_cluster.genai[0].id
     notebook_task {
-      notebook_path = databricks_notebook.notebook_model_serving.path
+      notebook_path = databricks_notebook.notebook_model_serving[0].path
       base_parameters = {
         "action" = "deploy"
       }
@@ -665,9 +683,9 @@ resource "databricks_job" "genai_pipeline" {
 
   task {
     task_key            = "load_test_model"
-    existing_cluster_id = databricks_cluster.genai.id
+    existing_cluster_id = databricks_cluster.genai[0].id
     notebook_task {
-      notebook_path = databricks_notebook.notebook_model_serving.path
+      notebook_path = databricks_notebook.notebook_model_serving[0].path
       base_parameters = {
         "action" = "load_test"
       }
@@ -679,9 +697,9 @@ resource "databricks_job" "genai_pipeline" {
 
   task {
     task_key            = "rag_build_index"
-    existing_cluster_id = databricks_cluster.genai.id
+    existing_cluster_id = databricks_cluster.genai[0].id
     notebook_task {
-      notebook_path = databricks_notebook.notebook_rag_pipeline.path
+      notebook_path = databricks_notebook.notebook_rag_pipeline[0].path
       base_parameters = {
         "action" = "build_vector_index"
       }
@@ -690,9 +708,9 @@ resource "databricks_job" "genai_pipeline" {
 
   task {
     task_key            = "rag_evaluate"
-    existing_cluster_id = databricks_cluster.genai.id
+    existing_cluster_id = databricks_cluster.genai[0].id
     notebook_task {
-      notebook_path = databricks_notebook.notebook_rag_pipeline.path
+      notebook_path = databricks_notebook.notebook_rag_pipeline[0].path
       base_parameters = {
         "action" = "evaluate"
       }
@@ -704,9 +722,9 @@ resource "databricks_job" "genai_pipeline" {
 
   task {
     task_key            = "ai_agent_build"
-    existing_cluster_id = databricks_cluster.genai.id
+    existing_cluster_id = databricks_cluster.genai[0].id
     notebook_task {
-      notebook_path = databricks_notebook.notebook_ai_agent.path
+      notebook_path = databricks_notebook.notebook_ai_agent[0].path
       base_parameters = {
         "action" = "build"
       }
@@ -718,18 +736,18 @@ resource "databricks_job" "genai_pipeline" {
 
   task {
     task_key            = "llm_dq_checker"
-    existing_cluster_id = databricks_cluster.genai.id
+    existing_cluster_id = databricks_cluster.genai[0].id
     notebook_task {
-      notebook_path   = databricks_notebook.notebook_llm_dq_checker.path
+      notebook_path   = databricks_notebook.notebook_llm_dq_checker[0].path
       base_parameters = {}
     }
   }
 
   task {
     task_key            = "finetuning_train"
-    existing_cluster_id = databricks_cluster.genai.id
+    existing_cluster_id = databricks_cluster.genai[0].id
     notebook_task {
-      notebook_path = databricks_notebook.notebook_finetuning.path
+      notebook_path = databricks_notebook.notebook_finetuning[0].path
       base_parameters = {
         "action" = "train"
       }
@@ -738,9 +756,9 @@ resource "databricks_job" "genai_pipeline" {
 
   task {
     task_key            = "governance_setup"
-    existing_cluster_id = databricks_cluster.genai.id
+    existing_cluster_id = databricks_cluster.genai[0].id
     notebook_task {
-      notebook_path = databricks_notebook.notebook_governance.path
+      notebook_path = databricks_notebook.notebook_governance[0].path
       base_parameters = {
         "action" = "setup_monitoring"
       }
