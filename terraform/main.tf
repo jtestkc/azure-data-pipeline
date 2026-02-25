@@ -328,18 +328,22 @@ resource "databricks_cluster" "main" {
 }
 
 # ============================================================================
-# GENAI CLUSTER — Cost-optimized for GenAI tasks
-# Uses single worker, shorter autotermination, smaller nodes
+# GENAI CLUSTER — Cost-optimized for GenAI tasks with Spot Instances
+# Uses spot instances for 60-70% cost savings
 # ============================================================================
 resource "databricks_cluster" "genai" {
   cluster_name            = "${var.prefix}-genai-cluster"
   spark_version           = var.spark_version
-  node_type_id            = "Standard_DS3_v2" # Smaller than DS4_v2, cheaper
-  autotermination_minutes = 15                # Terminate after 15 min idle (saves ~75%)
-  num_workers             = 1                 # Single worker (sufficient for most tasks)
+  node_type_id            = "Standard_DS3_v2"
+  autotermination_minutes = 15 # Terminate after 15 min idle
+  num_workers             = 1  # Single worker
   data_security_mode      = "SINGLE_USER"
 
-  # Enable Photon for faster & cheaper compute
+  # Enable spot instances for cost savings (60-70% cheaper)
+  azure_attributes {
+    availability = "SPOT_AZURE"
+  }
+
   spark_conf = {
     # Storage Access
     "fs.azure.account.key.${azurerm_storage_account.datalake.name}.dfs.core.windows.net" = azurerm_storage_account.datalake.primary_access_key
@@ -355,6 +359,7 @@ resource "databricks_cluster" "genai" {
   custom_tags = {
     "ResourceClass" = "GenAI"
     "CostCenter"    = "Dev/Test"
+    "UseSpot"       = "true"
   }
 
   library {
