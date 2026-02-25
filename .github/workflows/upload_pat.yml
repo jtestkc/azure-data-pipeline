@@ -1,19 +1,27 @@
-name: Upload PAT Token to GitHub Secrets
+name: Auto Upload PAT Token
 
 on:
-  workflow_dispatch:
-    inputs:
-      pat_token:
-        description: 'PAT Token (from terraform output -raw databricks_pat_token)'
-        required: true
-        type: string
+  workflow_run:
+    workflows: ["Deploy Azure Databricks Pipeline"]
+    types: [completed]
+    branches: [main]
 
 jobs:
-  upload:
-    name: Upload DATABRICKS_TOKEN
+  upload-token:
+    name: Auto Upload DATABRICKS_TOKEN
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
+      - name: Download PAT Token Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: databricks-pat-token
+          path: .
+        id: download
+
       - name: Upload to GitHub Secrets
+        if: steps.download.outputs.artifacts_found == 'true'
         run: |
-          echo "${{ github.event.inputs.pat_token }}" | gh secret set DATABRICKS_TOKEN --repo ${{ github.repository }}
-          echo "✅ DATABRICKS_TOKEN uploaded successfully!"
+          TOKEN=$(cat pat_token.txt)
+          echo "$TOKEN" | gh secret set DATABRICKS_TOKEN --repo ${{ github.repository }}
+          echo "✅ DATABRICKS_TOKEN uploaded automatically!"
