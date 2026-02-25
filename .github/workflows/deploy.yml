@@ -256,7 +256,6 @@ jobs:
   full-cycle:
     name: Deploy + Run Pipeline
     runs-on: ubuntu-latest
-    needs: plan
     if: github.event.inputs.action == 'full-cycle'
     steps:
       - name: Checkout code
@@ -320,6 +319,7 @@ jobs:
 
       - name: Get Databricks Job ID
         id: job
+        timeout-minutes: 2
         run: |
           WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
           if [ -n "${{ secrets.DATABRICKS_TOKEN }}" ]; then
@@ -356,7 +356,7 @@ jobs:
   cleanup:
     name: Cleanup on Failure
     runs-on: ubuntu-latest
-    needs: [deploy]
+    needs: [deploy, full-cycle]
     if: failure() && (github.event.inputs.action == 'deploy' || github.event.inputs.action == 'full-cycle')
     steps:
       - name: Checkout code
@@ -426,7 +426,6 @@ jobs:
   run-pipeline:
     name: Run Databricks Pipeline
     runs-on: ubuntu-latest
-    needs: plan
     if: github.event.inputs.action == 'run-pipeline'
     steps:
       - name: Checkout code
@@ -458,6 +457,7 @@ jobs:
 
       - name: Get Databricks Job ID
         id: job
+        timeout-minutes: 2
         run: |
           WORKSPACE_URL=${{ steps.workspace.outputs.workspace_url }}
           WORKSPACE_NAME=${{ steps.workspace.outputs.workspace_name }}
