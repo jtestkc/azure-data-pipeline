@@ -1,0 +1,297 @@
+{
+  "name": "genai-pipeline",
+  "description": "GenAI Pipeline with Mosaic AI - Model Serving, RAG, Agent, Fine-tuning, and Governance",
+  "timeout_seconds": 7200,
+  "max_concurrent_runs": 1,
+  "tags": {
+    "owner": "data-science-team",
+    "environment": "production",
+    "team": "ai-platform"
+  },
+  "tasks": [
+    {
+      "task_key": "setup_environment",
+      "description": "Setup environment and install required libraries",
+      "notebook_task": {
+        "notebook_path": "/Shared/notebooks/setup_genai",
+        "base_parameters": {}
+      },
+      "cluster_key": "genai-cluster",
+      "timeout_seconds": 300
+    },
+    {
+      "task_key": "model_serving_deploy",
+      "description": "Section 9.1: Deploy Llama 3 model to Mosaic AI Model Serving",
+      "notebook_task": {
+        "notebook_path": "/Shared/notebooks/09_genai/model_serving/model_serving",
+        "base_parameters": {
+          "action": "deploy"
+        }
+      },
+      "depends_on": [
+        {"task_key": "setup_environment"}
+      ],
+      "cluster_key": "genai-cluster",
+      "timeout_seconds": 600,
+      "retry_on_timeout": false
+    },
+    {
+      "task_key": "load_test_model",
+      "description": "Section 9.1: Load test with 50 concurrent requests, log p50/p95 to MLflow",
+      "notebook_task": {
+        "notebook_path": "/Shared/notebooks/09_genai/model_serving/model_serving",
+        "base_parameters": {
+          "action": "load_test"
+        }
+      },
+      "depends_on": [
+        {"task_key": "model_serving_deploy"}
+      ],
+      "cluster_key": "genai-cluster",
+      "timeout_seconds": 900,
+      "retry_on_timeout": false
+    },
+    {
+      "task_key": "rag_create_knowledge_base",
+      "description": "Section 9.2: Create knowledge base from Gold layer data",
+      "notebook_task": {
+        "notebook_path": "/Shared/notebooks/09_genai/rag/rag_pipeline",
+        "base_parameters": {
+          "action": "create_knowledge_base"
+        }
+      },
+      "depends_on": [
+        {"task_key": "setup_environment"}
+      ],
+      "cluster_key": "genai-cluster",
+      "timeout_seconds": 600
+    },
+    {
+      "task_key": "rag_build_vector_index",
+      "description": "Section 9.2: Create Mosaic AI Vector Search index",
+      "notebook_task": {
+        "notebook_path": "/Shared/notebooks/09_genai/rag/rag_pipeline",
+        "base_parameters": {
+          "action": "build_vector_index"
+        }
+      },
+      "depends_on": [
+        {"task_key": "rag_create_knowledge_base"}
+      ],
+      "cluster_key": "genai-cluster",
+      "timeout_seconds": 600
+    },
+    {
+      "task_key": "rag_evaluate",
+      "description": "Section 9.2: Evaluate RAG with mlflow.evaluate (faithfulness, answer_relevance, context_recall)",
+      "notebook_task": {
+        "notebook_path": "/Shared/notebooks/09_genai/rag/rag_pipeline",
+        "base_parameters": {
+          "action": "evaluate"
+        }
+      },
+      "depends_on": [
+        {"task_key": "rag_build_vector_index"},
+        {"task_key": "load_test_model"}
+      ],
+      "cluster_key": "genai-cluster",
+      "timeout_seconds": 900
+    },
+    {
+      "task_key": "ai_agent_build",
+      "description": "Section 9.3: Build AI Sales Agent with SQL tool, customer lookup, and insight generation",
+      "notebook_task": {
+        "notebook_path": "/Shared/notebooks/09_genai/ai_agent/ai_sales_agent",
+        "base_parameters": {
+          "action": "build"
+        }
+      },
+      "depends_on": [
+        {"task_key": "rag_evaluate"}
+      ],
+      "cluster_key": "genai-cluster",
+      "timeout_seconds": 600
+    },
+    {
+      "task_key": "ai_agent_register",
+      "description": "Section 9.3: Register agent in MLflow with signature and deploy to Model Serving",
+      "notebook_task": {
+        "notebook_path": "/Shared/notebooks/09_genai/ai_agent/ai_sales_agent",
+        "base_parameters": {
+          "action": "register"
+        }
+      },
+      "depends_on": [
+        {"task_key": "ai_agent_build"}
+      ],
+      "cluster_key": "genai-cluster",
+      "timeout_seconds": 600
+    },
+    {
+      "task_key": "llm_dq_checker",
+      "description": "Section 9.4: Sample 100 rows, send to LLM for anomaly detection, write to dq_reports",
+      "notebook_task": {
+        "notebook_path": "/Shared/notebooks/09_genai/llm_checker/llm_data_quality_checker",
+        "base_parameters": {}
+      },
+      "depends_on": [
+        {"task_key": "setup_environment"}
+      ],
+      "cluster_key": "genai-cluster",
+      "timeout_seconds": 600,
+      "retry_on_timeout": true,
+      "max_retries": 2
+    },
+    {
+      "task_key": "llm_dq_alert",
+      "description": "Section 9.4: Trigger Slack alert if >5 issues flagged by LLM",
+      "notebook_task": {
+        "notebook_path": "/Shared/notebooks/09_genai/llm_checker/llm_data_quality_checker",
+        "base_parameters": {
+          "action": "send_alert"
+        }
+      },
+      "depends_on": [
+        {"task_key": "llm_dq_checker"}
+      ],
+      "cluster_key": "genai-cluster",
+      "timeout_seconds": 300
+    },
+    {
+      "task_key": "finetuning_prepare_data",
+      "description": "Section 9.5: Generate synthetic support tickets (~500 records)",
+      "notebook_task": {
+        "notebook_path": "/Shared/notebooks/09_genai/finetuning/finetuning",
+        "base_parameters": {
+          "action": "prepare_data"
+        }
+      },
+      "depends_on": [
+        {"task_key": "setup_environment"}
+      ],
+      "cluster_key": "genai-cluster",
+      "timeout_seconds": 600
+    },
+    {
+      "task_key": "finetuning_train",
+      "description": "Section 9.5: Fine-tune Dolly-v2-3b with Mosaic AI Training, track in MLflow",
+      "notebook_task": {
+        "notebook_path": "/Shared/notebooks/09_genai/finetuning/finetuning",
+        "base_parameters": {
+          "action": "train"
+        }
+      },
+      "depends_on": [
+        {"task_key": "finetuning_prepare_data"}
+      ],
+      "cluster_key": "genai-cluster",
+      "timeout_seconds": 3600,
+      "retry_on_timeout": true,
+      "max_retries": 1
+    },
+    {
+      "task_key": "finetuning_register",
+      "description": "Section 9.5: Register to Unity Catalog (main.genai.support_classifier), deploy and compare",
+      "notebook_task": {
+        "notebook_path": "/Shared/notebooks/09_genai/finetuning/finetuning",
+        "base_parameters": {
+          "action": "register"
+        }
+      },
+      "depends_on": [
+        {"task_key": "finetuning_train"}
+      ],
+      "cluster_key": "genai-cluster",
+      "timeout_seconds": 600
+    },
+    {
+      "task_key": "governance_monitoring",
+      "description": "Section 9.6: Enable Lakehouse Monitoring on dq_reports table",
+      "notebook_task": {
+        "notebook_path": "/Shared/notebooks/09_genai/governance/governai_guardrails",
+        "base_parameters": {
+          "action": "setup_monitoring"
+        }
+      },
+      "depends_on": [
+        {"task_key": "llm_dq_checker"}
+      ],
+      "cluster_key": "genai-cluster",
+      "timeout_seconds": 300
+    },
+    {
+      "task_key": "governance_audit",
+      "description": "Section 9.6: Log all LLM inputs/outputs to audit table (request_id, user_id, prompt, response, latency_ms, token_count, timestamp)",
+      "notebook_task": {
+        "notebook_path": "/Shared/notebooks/09_genai/governance/governai_guardrails",
+        "base_parameters": {
+          "action": "audit_log"
+        }
+      },
+      "depends_on": [
+        {"task_key": "ai_agent_register"},
+        {"task_key": "rag_evaluate"}
+      ],
+      "cluster_key": "genai-cluster",
+      "timeout_seconds": 300
+    },
+    {
+      "task_key": "governance_rls",
+      "description": "Section 9.6: Apply Unity Catalog row-level security on audit log table",
+      "notebook_task": {
+        "notebook_path": "/Shared/notebooks/09_genai/governance/governai_guardrails",
+        "base_parameters": {
+          "action": "apply_rls"
+        }
+      },
+      "depends_on": [
+        {"task_key": "governance_audit"}
+      ],
+      "cluster_key": "genai-cluster",
+      "timeout_seconds": 300
+    }
+  ],
+  "email_notifications": {
+    "on_success": ["imjaykc31@gmail.com"],
+    "on_failure": ["imjaykc31@gmail.com"],
+    "on_start": [],
+    "on_duration_threshold_exceeded": []
+  },
+  "clusters": [
+    {
+      "cluster_name": "genai-cluster",
+      "spark_version": "14.3-scala12",
+      "node_type_id": "Standard_DS4_v2",
+      "num_workers": 2,
+      "autoscale": {
+        "min_workers": 1,
+        "max_workers": 8
+      },
+      "autotermination_minutes": 60,
+      "spark_conf": {
+        "spark.databricks.delta.optimizeWrite.enabled": "true",
+        "spark.databricks.delta.autoCompact.enabled": "true",
+        "spark.sql.shuffle.partitions": "8",
+        "spark.mlflow.trackingUri": "databricks"
+      },
+      "libraries": [
+        {
+          "pypi": {
+            "package": "mlflow>=2.10.0"
+          }
+        },
+        {
+          "pypi": {
+            "package": "langchain>=0.1.0"
+          }
+        },
+        {
+          "pypi": {
+            "package": "databricks-vector-search"
+          }
+        }
+      ]
+    }
+  ],
+  "format": "MULTI_TASK"
+}

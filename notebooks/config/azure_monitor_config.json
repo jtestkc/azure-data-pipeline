@@ -37,7 +37,7 @@
       "description": "Alert when data quality score drops below 95%",
       "condition": "dq_score < 95",
       "severity": "warning",
-      "action_group_id": "slack-action-group"
+      "action_group_id": "email-action-group"
     }
   ],
   "metrics_to_track": [

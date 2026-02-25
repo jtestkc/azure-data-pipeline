@@ -100,3 +100,13 @@ output "databricks_pat_token" {
   value       = databricks_token.sp_token.token_value
   sensitive   = true
 }
+
+output "sql_server_fqdn" {
+  description = "Fully qualified domain name of the Azure SQL Server"
+  value       = azurerm_mssql_server.sql_main.fully_qualified_domain_name
+}
+
+output "sql_database_name" {
+  description = "Name of the Azure SQL Database"
+  value       = azurerm_mssql_database.sql_db.name
+}

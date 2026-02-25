@@ -102,18 +102,11 @@
     }
   ],
   "email_notifications": {
-    "on_success": ["data-team@company.com"],
-    "on_failure": ["data-team@company.com", "alerts@company.com"],
+    "on_success": ["imjaykc31@gmail.com"],
+    "on_failure": ["imjaykc31@gmail.com"],
     "on_start": [],
     "on_duration_threshold_exceeded": []
   },
-  "webhook_notifications": [
-    {
-      "webhook_id": "slack-alerts",
-      "events": ["task_failed", "run_failed"],
-      "url": "{{secrets/kv-secrets/slack-webhook-url}}"
-    }
-  ],
   "clusters": [
     {
       "cluster_name": "shared-cluster",

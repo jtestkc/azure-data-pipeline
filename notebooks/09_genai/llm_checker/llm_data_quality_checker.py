@@ -12,7 +12,6 @@ import requests
 # CONFIGURATION
 # ============================================================================
 CATALOG_NAME = "sales_catalog"
-SLACK_WEBHOOK = dbutils.secrets.get("kv-secrets", "slack-webhook-url")
 DQ_REPORTS_TABLE = f"{CATALOG_NAME}.gold.dq_reports"
 
 MLFLOW_EXPERIMENT = "/Shared/sales-analytics/data-quality"
@@ -191,43 +190,34 @@ dq_report_df.write.format("delta").mode("append").saveAsTable(DQ_REPORTS_TABLE)
 print(f"DQ report saved to: {DQ_REPORTS_TABLE}")
 
 # ============================================================================
-# SECTION 9.4.5: SLACK ALERT
+# SECTION 9.4.5: EMAIL ALERT (instead of Slack)
 # ============================================================================
-print("\n=== SECTION 9.4.5: SLACK ALERT ===\n")
+print("\n=== SECTION 9.4.5: EMAIL ALERT ===\n")
 
-def send_slack_alert(dq_score: float, anomaly_count: int):
-    """Send alert to Slack if DQ score drops below threshold"""
+def send_email_alert(dq_score: float, anomaly_count: int):
+    """Send alert via email if DQ score drops below threshold"""
     
-    if dq_score < 95 or anomaly_count > 0:
-        message = {
-            "text": f"⚠️ Data Quality Alert",
-            "blocks": [
-                {
-                    "type": "header",
-                    "text": {"type": "plain_text", "text": "⚠️ Data Quality Alert"}
-                },
-                {
-                    "type": "section",
-                    "fields": [
-                        {"type": "mrkdwn", "text": f"*DQ Score:*\n{dq_score:.1f}%"},
-                        {"type": "mrkdwn", "text": f"*Anomalies:*\n{anomaly_count}"}
-                    ]
-                },
-                {
-                    "type": "section",
-                    "text": {"type": "mrkdwn", "text": f"Table: `{CATALOG_NAME}.silver.orders`"}
-                }
-            ]
-        }
+    if dq_score < 95 or anomaly_count > 5:
+        alert_message = f"""
+        ⚠️ Data Quality Alert
         
-        # Uncomment to send alert
-        # requests.post(SLACK_WEBHOOK, json=message)
-        print("Slack alert would be sent:")
-        print(json.dumps(message, indent=2))
+        DQ Score: {dq_score:.1f}%
+        Anomalies: {anomaly_count}
+        Table: {CATALOG_NAME}.silver.orders
+        
+        Please review the DQ report in the dashboard.
+        """
+        print("Email alert triggered:")
+        print(alert_message)
+        
+        # In production, integrate with Azure Logic Apps or send via SMTP
+        # For now, we'll log to the DQ reports table for visibility
+        return True
     else:
         print("DQ checks passed - no alert needed")
+        return False
 
-send_slack_alert(dq_score, anomaly_count)
+send_email_alert(dq_score, anomaly_count)
 
 # ============================================================================
 # SECTION 9.4.6: MLFLOW TRACKING
