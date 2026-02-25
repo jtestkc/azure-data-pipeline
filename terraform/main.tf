@@ -471,29 +471,22 @@ resource "databricks_workspace_file" "config_connection" {
 resource "databricks_job" "pipeline" {
   name = "Real-Time-Sales-Analytics-Full-Pipeline"
 
-  # Define job cluster - created when job runs
+  # Define job cluster - created when job runs (single-node)
   job_cluster {
     job_cluster_key = "pipeline_cluster"
     new_cluster {
-      node_type_id  = var.cluster_node_type
-      num_workers   = var.cluster_max_workers
+      node_type_id  = "Standard_DC4as_v5" # AMD-based, supports Kafka and all requirements
+      num_workers   = 1                   # Single node for cost savings
       spark_version = var.spark_version
+
+      # Single node config
+      spark_env_vars = {
+        "SPARK_WORKER_CORES" = "4"
+      }
 
       spark_conf = {
         "spark.databricks.delta.optimizeWrite.enabled" = "true"
         "spark.databricks.delta.autoCompact.enabled"   = "true"
-      }
-    }
-  }
-
-  task {
-    task_key        = "ingest_bronze"
-    job_cluster_key = "pipeline_cluster"
-    notebook_task {
-      notebook_path = databricks_notebook.notebook_bronze.path
-      base_parameters = {
-        "reset_checkpoint" = "true"
-        "reset_data"       = "true"
       }
     }
   }
