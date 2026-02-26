@@ -25,13 +25,13 @@ skip_bronze = dbutils.widgets.get("skip_bronze").lower() == "true"
 bronze_path = f"{ROOT_PATH}/bronze/orders"
 if skip_bronze:
     try:
-        bronze_check = spark.read.format("delta").load(bronze_path)
-        count = bronze_check.count()
-        if count > 0:
-            print(f"Bronze data already exists with {count} records. Skipping ingestion.")
+        # Quick check - just verify the path exists
+        files = dbutils.fs.ls(bronze_path)
+        if len(files) > 0:
+            print(f"Bronze data already exists at {bronze_path}. Skipping ingestion.")
             dbutils.notebook.exit("SKIP_BRONZE_SUCCESS")
     except Exception as e:
-        print(f"No existing bronze data found or error checking: {e}")
+        print(f"No existing bronze data found: {e}")
         print("Proceeding with ingestion...")
 
 # Define schema
