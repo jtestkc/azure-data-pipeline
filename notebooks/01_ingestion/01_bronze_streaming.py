@@ -6,8 +6,8 @@ from pyspark.sql.functions import col, to_timestamp, current_timestamp
 from pyspark.sql.types import StructType, StructField, StringType, DoubleType, TimestampType, LongType
 
 # Hardcoded for testing (should use secrets in production)
-ADLS_ACCOUNT_NAME = "adlsrtsaf50671"
-ADLS_STORAGE_KEY = dbutils.secrets.get("kv-secrets", "adls-storage-key")
+ADLS_ACCOUNT_NAME = dbutils.secrets.get("databricks-secrets", "adls-account-name")
+ADLS_STORAGE_KEY = dbutils.secrets.get("databricks-secrets", "adls-storage-key")
 
 # Configure Spark to access ADLS Gen2
 spark.conf.set(f"fs.azure.account.key.{ADLS_ACCOUNT_NAME}.dfs.core.windows.net", ADLS_STORAGE_KEY)
