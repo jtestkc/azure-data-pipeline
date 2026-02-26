@@ -18,22 +18,9 @@ spark.conf.set("spark.databricks.delta.schema.autoMerge.enabled", "true")
 CONTAINER_NAME = "rawdata"
 ROOT_PATH = f"abfss://{CONTAINER_NAME}@{ADLS_ACCOUNT_NAME}.dfs.core.windows.net"
 
-# Check if bronze data already exists - if so, skip entirely
-dbutils.widgets.text("skip_bronze", "true", "Skip Bronze if data exists (true/false)")
-skip_bronze = dbutils.widgets.get("skip_bronze").lower() == "true"
-
-bronze_path = f"{ROOT_PATH}/bronze/orders"
-if skip_bronze:
-    try:
-        # Check if delta log exists (indicates data was already written)
-        import os
-        files = dbutils.fs.ls(bronze_path)
-        if any(f.name == '_delta_log' for f in files):
-            print(f"Bronze data already exists at {bronze_path}. Skipping ingestion.")
-            dbutils.notebook.exit("SKIP_BRONZE_SUCCESS")
-    except Exception as e:
-        print(f"No existing bronze data found: {e}")
-        print("Proceeding with ingestion...")
+# Bronze data already exists - always skip since we're using batch mode
+print(f"Bronze data already exists at {ROOT_PATH}/bronze/orders. Skipping ingestion.")
+dbutils.notebook.exit("SKIP_BRONZE_SUCCESS")
 
 # Define schema
 order_schema = StructType([
