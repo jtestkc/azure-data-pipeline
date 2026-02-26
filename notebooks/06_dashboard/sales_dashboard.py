@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
-ADLS_ACCOUNT_NAME = dbutils.secrets.get("kv-secrets", "adls-account-name")
+ADLS_ACCOUNT_NAME = dbutils.secrets.get("databricks-secrets", "adls-account-name")
 CONTAINER_NAME = "rawdata"
 ROOT_PATH = f"abfss://{CONTAINER_NAME}@{ADLS_ACCOUNT_NAME}.dfs.core.windows.net"
 

@@ -14,7 +14,7 @@ def sanitize_secret(secret_value):
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
-ADLS_ACCOUNT_NAME = sanitize_secret(dbutils.secrets.get("kv-secrets", "adls-account-name"))
+ADLS_ACCOUNT_NAME = sanitize_secret(dbutils.secrets.get("databricks-secrets", "adls-account-name"))
 CONTAINER_NAME = "rawdata"
 ROOT_PATH = f"abfss://{CONTAINER_NAME}@{ADLS_ACCOUNT_NAME}.dfs.core.windows.net"
 
@@ -22,9 +22,17 @@ SILVER_PATH = f"{ROOT_PATH}/silver/orders"
 ENRICHED_ORDERS_PATH = f"{ROOT_PATH}/enriched/orders"
 ENRICHMENT_METRICS_PATH = f"{ROOT_PATH}/enriched/enrichment_metrics"
 
-JDBC_URL = dbutils.secrets.get("kv-secrets", "sql-jdbc-url")
-JDBC_USER = dbutils.secrets.get("kv-secrets", "sql-username")
-JDBC_PASSWORD = dbutils.secrets.get("kv-secrets", "sql-password")
+# Widgets to reset state if needed
+dbutils.widgets.text("reset_data", "false", "Reset Data (true/false)")
+
+if dbutils.widgets.get("reset_data").lower() == "true":
+    print(f"🗑️  RESETTING ENRICHED LAYER: {ENRICHED_ORDERS_PATH}")
+    dbutils.fs.rm(ENRICHED_ORDERS_PATH, True)
+    dbutils.fs.rm(ENRICHMENT_METRICS_PATH, True)
+
+JDBC_URL = dbutils.secrets.get("databricks-secrets", "sql-jdbc-url")
+JDBC_USER = dbutils.secrets.get("databricks-secrets", "sql-username")
+JDBC_PASSWORD = dbutils.secrets.get("databricks-secrets", "sql-password")
 
 SQL_TABLE = "customers"
 
@@ -114,8 +122,12 @@ total = enriched_orders.count()
 
 print(f"\n=== Enrichment Quality ===")
 print(f"Total orders: {total}")
-print(f"Matched with customer: {matched} ({matched/total*100:.1f}%)")
-print(f"Unmatched: {unmatched} ({unmatched/total*100:.1f}%)")
+if total > 0:
+    print(f"Matched with customer: {matched} ({matched/total*100:.1f}%)")
+    print(f"Unmatched: {unmatched} ({unmatched/total*100:.1f}%)")
+else:
+    print("Matched with customer: 0 (0.0%)")
+    print("Unmatched: 0 (0.0%)")
 
 # Show sample enriched data
 display(enriched_orders.limit(10))
@@ -123,11 +135,13 @@ display(enriched_orders.limit(10))
 # ============================================================================
 # SAVE ENRICHMENT METRICS
 # ============================================================================
+match_rate = (matched/total*100) if total > 0 else 0.0
+
 enrichment_metrics = spark.createDataFrame([
-    ("total_orders", total),
-    ("matched_customers", matched),
-    ("unmatched_customers", unmatched),
-    ("match_rate", matched/total*100)
+    ("total_orders", float(total)),
+    ("matched_customers", float(matched)),
+    ("unmatched_customers", float(unmatched)),
+    ("match_rate", float(match_rate))
 ], ["metric_name", "metric_value"])
 
 enrichment_metrics.write.format("delta") \

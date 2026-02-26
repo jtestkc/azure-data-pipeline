@@ -4,6 +4,7 @@
 # Revenue by region/day, top products, customer lifetime value with window functions
 
 from pyspark.sql.functions import sum, count, avg, max, min, row_number, dense_rank, col, datediff
+from pyspark.sql.types import LongType, DoubleType
 from pyspark.sql.window import Window
 from pyspark.sql import SparkSession
 import re
@@ -15,7 +16,7 @@ def sanitize_secret(secret_value):
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
-ADLS_ACCOUNT_NAME = sanitize_secret(dbutils.secrets.get("kv-secrets", "adls-account-name"))
+ADLS_ACCOUNT_NAME = sanitize_secret(dbutils.secrets.get("databricks-secrets", "adls-account-name"))
 CONTAINER_NAME = "rawdata"
 ROOT_PATH = f"abfss://{CONTAINER_NAME}@{ADLS_ACCOUNT_NAME}.dfs.core.windows.net"
 
@@ -26,6 +27,13 @@ DAILY_REVENUE_PATH = f"{GOLD_BASE_PATH}/daily_revenue"
 TOP_PRODUCTS_PATH = f"{GOLD_BASE_PATH}/top_products"
 CUSTOMER_LTV_PATH = f"{GOLD_BASE_PATH}/customer_ltv"
 REGIONAL_PERF_PATH = f"{GOLD_BASE_PATH}/regional_performance"
+
+# Widgets to reset state if needed
+dbutils.widgets.text("reset_data", "false", "Reset Data (true/false)")
+
+if dbutils.widgets.get("reset_data").lower() == "true":
+    print(f"🗑️  RESETTING GOLD LAYER: {GOLD_BASE_PATH}")
+    dbutils.fs.rm(GOLD_BASE_PATH, True)
 
 # ============================================================================
 # READ FROM SILVER LAYER

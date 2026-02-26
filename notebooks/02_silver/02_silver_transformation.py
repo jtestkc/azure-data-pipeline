@@ -6,8 +6,11 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, when, count, lag, lead, row_number
 from pyspark.sql.window import Window
-from pyspark.sql.types import IntegerType, DoubleType, StringType
+from pyspark.sql.types import IntegerType, DoubleType, StringType, LongType
 import delta
+
+# Enable schema evolution for Delta Merge
+spark.conf.set("spark.databricks.delta.schema.autoMerge.enabled", "true")
 import re
 
 def sanitize_secret(secret_value):
@@ -17,12 +20,19 @@ def sanitize_secret(secret_value):
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
-ADLS_ACCOUNT_NAME = sanitize_secret(dbutils.secrets.get("kv-secrets", "adls-account-name"))
+ADLS_ACCOUNT_NAME = sanitize_secret(dbutils.secrets.get("databricks-secrets", "adls-account-name"))
 CONTAINER_NAME = "rawdata"
 ROOT_PATH = f"abfss://{CONTAINER_NAME}@{ADLS_ACCOUNT_NAME}.dfs.core.windows.net"
 
 BRONZE_PATH = f"{ROOT_PATH}/bronze/orders"
 SILVER_PATH = f"{ROOT_PATH}/silver/orders"
+
+# Widgets to reset state if needed
+dbutils.widgets.text("reset_data", "false", "Reset Data (true/false)")
+
+if dbutils.widgets.get("reset_data").lower() == "true":
+    print(f"🗑️  RESETTING DATA: {SILVER_PATH}")
+    dbutils.fs.rm(SILVER_PATH, True)
 
 # ============================================================================
 # READ FROM BRONZE LAYER
@@ -63,7 +73,7 @@ silver_df = silver_df.fillna({
 # TYPE CASTING
 # ============================================================================
 silver_df = silver_df \
-    .withColumn("quantity", col("quantity").cast(IntegerType())) \
+    .withColumn("quantity", col("quantity").cast(LongType())) \
     .withColumn("unit_price", col("unit_price").cast(DoubleType())) \
     .withColumn("total_price", col("total_price").cast(DoubleType()))
 
