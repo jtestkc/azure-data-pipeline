@@ -66,7 +66,6 @@ bronze_df = (
 )
 
 print(f"Bronze schema: {bronze_df.schema.json()}")
-print(f"Total records: {bronze_df.count()}")
 
 # Output path
 output_path = f"{ROOT_PATH}/bronze/orders"
