@@ -14,13 +14,17 @@ spark.conf.set("spark.databricks.delta.schema.autoMerge.enabled", "true")
 import re
 
 def sanitize_secret(secret_value):
-    if not secret_value: return ""
-    return re.sub(r'[\s\x00-\x1F\x7F-\x9F]', '', secret_value)
+    return secret_value.strip() if secret_value else ""
 
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
-ADLS_ACCOUNT_NAME = sanitize_secret(dbutils.secrets.get("databricks-secrets", "adls-account-name"))
+ADLS_ACCOUNT_NAME = sanitize_secret(dbutils.secrets.get("kv-secrets", "adls-account-name"))
+ADLS_STORAGE_KEY = sanitize_secret(dbutils.secrets.get("kv-secrets", "adls-storage-key"))
+
+# Configure Spark to access ADLS Gen2
+spark.conf.set(f"fs.azure.account.key.{ADLS_ACCOUNT_NAME}.dfs.core.windows.net", ADLS_STORAGE_KEY)
+
 CONTAINER_NAME = "rawdata"
 ROOT_PATH = f"abfss://{CONTAINER_NAME}@{ADLS_ACCOUNT_NAME}.dfs.core.windows.net"
 
